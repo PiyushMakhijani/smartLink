@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smartlink.dev/schema/.smartlink.json",
+  "title": "smartlink manifest v1",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "description": { "type": "string" },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/linkEntry" }
+    }
+  },
+  "$defs": {
+    "linkType": {
+      "enum": ["symlink", "hardlink", "junction", "bindmount"]
+    },
+    "osOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string" },
+        "type": { "$ref": "#/$defs/linkType" }
+      }
+    },
+    "linkEntry": {
+      "type": "object",
+      "required": ["link", "target", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "link": {
+          "type": "string",
+          "description": "Path of the link, relative to the manifest directory."
+        },
+        "target": {
+          "type": "string",
+          "description": "Link target. Relative paths are portable; absolute paths are flagged by `smartlink git check`."
+        },
+        "type": { "$ref": "#/$defs/linkType" },
+        "os_specific": {
+          "type": "object",
+          "additionalProperties": false,
+          "propertyNames": { "enum": ["windows", "linux", "macos"] },
+          "properties": {
+            "windows": { "$ref": "#/$defs/osOverride" },
+            "linux": { "$ref": "#/$defs/osOverride" },
+            "macos": { "$ref": "#/$defs/osOverride" }
+          }
+        }
+      }
+    }
+  }
+}
