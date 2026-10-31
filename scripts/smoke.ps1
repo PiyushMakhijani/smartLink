@@ -1,6 +1,6 @@
 # Manual smoke run: exercises junctions, symlinks, hardlinks and DEAD detection
 # against real NTFS. Usage: pwsh -File scripts\smoke.ps1
-$exe = Join-Path $PSScriptRoot '..\target\debug\smartlink.exe'
+$exe = Join-Path $PSScriptRoot '..\target\debug\slink.exe'
 $tmp = Join-Path $env:TEMP 'smartlink-smoke'
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path "$tmp\libs\mylib", "$tmp\proj\vendor", "$tmp\proj\src" | Out-Null

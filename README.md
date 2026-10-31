@@ -1,8 +1,11 @@
 # smartlink
 
+![smartlink logo](logo.png)
+
 Unified cross-platform CLI for filesystem links — symlinks, hardlinks, junctions and
 bind mounts. Stops links from breaking when projects move between machines, drives
-and teammates. See [plan.md](plan.md) for the full roadmap.
+and teammates. The project is **smartlink**; the CLI is invoked as the shorter
+**`slink`**. See [plan.md](plan.md) for the full roadmap.
 
 ## Status
 
@@ -27,40 +30,40 @@ milestone still open. See [plan.md](plan.md).
 
 ```sh
 # auto-detect: same-volume file -> hardlink, Windows dir -> junction, else relative symlink
-smartlink make ../shared/utils ./src/utils
+slink make ../shared/utils ./src/utils
 
 # explicit types
-smartlink make big.mp4 media/big.mp4 --hard
-smartlink make C:\libs\mylib vendor\mylib --junction
-smartlink make ../config/app.yaml config/app.yaml --relative
+slink make big.mp4 media/big.mp4 --hard
+slink make C:\libs\mylib vendor\mylib --junction
+slink make ../config/app.yaml config/app.yaml --relative
 
 # inspect a directory (color-coded OK/DEAD, hardlinks grouped by inode/file-id)
-smartlink ls ./src
-smartlink ls ./data --hardlinks
+slink ls ./src
+slink ls ./data --hardlinks
 
 # convert one link type into another (safe: dead links need --preserve-broken)
-smartlink convert vendor\mylib --to symlink
+slink convert vendor\mylib --to symlink
 
 # auto-heal dead links by searching the tree for a matching filename
-smartlink fix . --dry-run
-smartlink fix . --yes
+slink fix . --dry-run
+slink fix . --yes
 
 # native copy-on-write clone (ReFS/NTFS-24H2, btrfs/XFS, APFS); never a plain copy
-smartlink dedupe base.bin snapshot.bin
+slink dedupe base.bin snapshot.bin
 
 # capture the links in a project as a portable .smartlink.json manifest
-smartlink init . --hardlinks
+slink init . --hardlinks
 
 # replay a manifest on a fresh clone (idempotent; --force replaces mismatches)
-smartlink sync
-smartlink sync --dry-run
+slink sync
+slink sync --dry-run
 
 # CI guard: fail if any committed symlink stores an absolute target
-smartlink git check .
+slink git check .
 
-# install post-checkout / post-merge hooks that auto-run `smartlink sync`
-smartlink git install-hooks
-smartlink git uninstall-hooks
+# install post-checkout / post-merge hooks that auto-run `slink sync`
+slink git install-hooks
+slink git uninstall-hooks
 ```
 
 On Windows, creating symlinks *and* junctions as a regular user requires Developer
@@ -69,7 +72,7 @@ Mode (the `SeCreateSymbolicLinkPrivilege`); administrators can do both directly.
 ## Building
 
 ```sh
-cargo build --release   # single static binary in target/release
+cargo build --release   # single static binary (slink) in target/release
 cargo test              # unit + integration tests
 ```
 

@@ -60,7 +60,7 @@ pub struct LinkEntry {
     /// Where the link itself is created (relative to repo root).
     pub link: PathBuf,
     /// What it points to (relative to repo root preferred; absolute tolerated
-    /// but flagged by `smartlink git check`).
+    /// but flagged by `slink git check`).
     pub target: PathBuf,
     #[serde(rename = "type")]
     pub link_type: LinkType,

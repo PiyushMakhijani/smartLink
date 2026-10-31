@@ -2,11 +2,17 @@
 name = "smartlink"
 version = "0.1.0"
 edition = "2021"
+autobins = false
 description = "Unified cross-platform CLI for symlinks, hardlinks, junctions and bind mounts"
 license = "MIT"
 repository = "https://github.com/piyush/smartlink"
 keywords = ["symlink", "hardlink", "junction", "cli", "filesystem"]
 categories = ["command-line-utilities", "filesystem"]
+
+# Project/library is `smartlink`; the CLI is invoked as the shorter `slink`.
+[[bin]]
+name = "slink"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

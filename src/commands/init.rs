@@ -1,4 +1,4 @@
-//! `smartlink init` – generate a `.smartlink.json` manifest from the links that
+//! `slink init` – generate a `.smartlink.json` manifest from the links that
 //! already exist in a directory tree (plan.md §2 Phase 3).
 //!
 //! The scan records every reparse-point link (symlink / junction / bind mount)

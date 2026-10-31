@@ -8,7 +8,7 @@ mod manifest;
 
 #[derive(Parser)]
 #[command(
-    name = "smartlink",
+    name = "slink",
     version,
     about = "Unified cross-platform links: symlinks, hardlinks, junctions, bind mounts"
 )]
@@ -126,7 +126,7 @@ pub enum GitCommand {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
-    /// Install post-checkout / post-merge hooks that run `smartlink sync`
+    /// Install post-checkout / post-merge hooks that run `slink sync`
     InstallHooks {
         /// Repo (or any path inside it) to install hooks into
         #[arg(default_value = ".")]

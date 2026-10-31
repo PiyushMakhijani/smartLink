@@ -1,4 +1,4 @@
-//! `smartlink fix` – auto-heal broken links (plan.md §2 Phase 2).
+//! `slink fix` – auto-heal broken links (plan.md §2 Phase 2).
 //!
 //! Scan for dead links -> search the project tree for matching filenames ->
 //! compare size and (for files) SHA-256 -> re-link, prompting per candidate

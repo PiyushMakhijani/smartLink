@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-/// The kind of link smartlink knows about.
+/// The kind of link slink knows about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkKind {
     Symlink,
@@ -47,7 +47,7 @@ pub struct LinkInfo {
 ///
 /// Hardlinks cannot be distinguished from plain files by a single stat, so
 /// `None` is returned for them here; use [`hardlink_count`] / [`file_id`] on
-/// regular files when grouping is requested (e.g. by `smartlink ls`).
+/// regular files when grouping is requested (e.g. by `slink ls`).
 pub fn detect(path: &Path) -> anyhow::Result<Option<LinkInfo>> {
     #[cfg(windows)]
     {

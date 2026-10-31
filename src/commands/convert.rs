@@ -1,4 +1,4 @@
-//! `smartlink convert` – morph one link type into another (plan.md §2 Phase 2).
+//! `slink convert` – morph one link type into another (plan.md §2 Phase 2).
 //!
 //! Logic: read target -> delete old link -> create new link (via the shared
 //! `make::create_link` with force). Safety: a dead link cannot be converted
@@ -16,7 +16,7 @@ use super::make;
 pub fn run(link_path: &Path, to: &str, preserve_broken: bool, yes: bool) -> Result<()> {
     let want = parse_want(to)?;
     let info = link::detect(link_path)?
-        .with_context(|| format!("{} is not a link smartlink can convert", link_path.display()))?;
+        .with_context(|| format!("{} is not a link slink can convert", link_path.display()))?;
 
     let target: PathBuf = if info.kind == LinkKind::Hardlink {
         hardlink_target(link_path, &info, yes)?
@@ -26,7 +26,7 @@ pub fn run(link_path: &Path, to: &str, preserve_broken: bool, yes: bool) -> Resu
 
     if !target.exists() && !preserve_broken {
         bail!(
-            "{} is dead (target {} missing); re-link it with `smartlink fix` or convert \
+            "{} is dead (target {} missing); re-link it with `slink fix` or convert \
              with --preserve-broken",
             link_path.display().to_string().bold(),
             target.display()

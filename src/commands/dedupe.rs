@@ -1,4 +1,4 @@
-//! `smartlink dedupe` – native Copy-on-Write cloning (plan.md §2 Phase 2).
+//! `slink dedupe` – native Copy-on-Write cloning (plan.md §2 Phase 2).
 //!
 //! Uses the filesystem's own block-sharing primitive (`FSCTL_DUPLICATE_EXTENTS_TO_FILE`
 //! on Windows/ReFS, `FICLONE` on Linux, `clonefile(2)` on macOS) so the clone

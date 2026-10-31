@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn bin() -> &'static Path {
-    Path::new(env!("CARGO_BIN_EXE_smartlink"))
+    Path::new(env!("CARGO_BIN_EXE_slink"))
 }
 
 fn run(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -117,7 +117,7 @@ fn git_install_and_uninstall_hooks_are_idempotent() {
     let hook = root.join(".git/hooks/post-merge");
     assert!(hook.exists(), "post-merge hook should be installed");
     let text = std::fs::read_to_string(&hook).unwrap();
-    assert!(text.contains("smartlink sync"), "{text}");
+    assert!(text.contains("slink sync"), "{text}");
     assert!(text.contains(">>> smartlink >>>"), "{text}");
 
     // installing again refreshes (still exactly one managed block, no dupes)

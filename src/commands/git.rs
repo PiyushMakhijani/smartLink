@@ -46,12 +46,12 @@ pub fn check(path: &Path) -> Result<()> {
     }
     bail!(
         "git check failed: {} absolute symlink(s) found; re-create them relative \
-         (`smartlink make --symlink --relative --force`) so they survive cloning",
+         (`slink make --symlink --relative --force`) so they survive cloning",
         offenders.len()
     )
 }
 
-/// Install `post-checkout` / `post-merge` hooks that run `smartlink sync`.
+/// Install `post-checkout` / `post-merge` hooks that run `slink sync`.
 pub fn install_hooks(path: &Path, force: bool) -> Result<()> {
     let git_dir = find_git_dir(path)
         .with_context(|| format!("no git repository found at or above {}", path.display()))?;
@@ -95,7 +95,7 @@ pub fn install_hooks(path: &Path, force: bool) -> Result<()> {
         }
     }
     println!(
-        "{} git will now run `smartlink sync` after checkout and merge",
+        "{} git will now run `slink sync` after checkout and merge",
         "done".green().bold()
     );
     Ok(())
@@ -126,13 +126,13 @@ pub fn uninstall_hooks(path: &Path) -> Result<()> {
 }
 
 /// The shell fragment written between the markers: only acts when a manifest is
-/// present and `smartlink` is on PATH, and never fails the git operation.
+/// present and `slink` is on PATH, and never fails the git operation.
 fn hook_block() -> String {
     format!(
         "{MARKER}\n\
-         # Managed by `smartlink git install-hooks` - recreates links after git ops.\n\
-         if [ -f {manifest} ] && command -v smartlink >/dev/null 2>&1; then\n\
-         \x20 smartlink sync || echo \"smartlink sync failed\" >&2\n\
+         # Managed by `slink git install-hooks` - recreates links after git ops.\n\
+         if [ -f {manifest} ] && command -v slink >/dev/null 2>&1; then\n\
+         \x20 slink sync || echo \"slink sync failed\" >&2\n\
          fi\n\
          {END_MARKER}",
         manifest = DEFAULT_MANIFEST_NAME

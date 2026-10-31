@@ -1,4 +1,4 @@
-//! `smartlink sync` – recreate every link declared in `.smartlink.json`
+//! `slink sync` – recreate every link declared in `.smartlink.json`
 //! (plan.md §2 Phase 3).
 //!
 //! The manifest directory is treated as the project root: `link` and `target`

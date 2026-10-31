@@ -1,4 +1,4 @@
-//! `smartlink make` – create a link with auto-detection.
+//! `slink make` – create a link with auto-detection.
 
 use std::path::{Path, PathBuf};
 
@@ -20,7 +20,7 @@ pub fn run(
 ) -> Result<()> {
     if !target.exists() {
         bail!(
-            "target {} does not exist (use `smartlink fix` later to heal dead links)",
+            "target {} does not exist (use `slink fix` later to heal dead links)",
             target.display().to_string().bold()
         );
     }

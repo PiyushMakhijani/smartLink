@@ -1,4 +1,4 @@
-//! `smartlink ls` – visualise links in a directory (plan.md §2 Phase 1).
+//! `slink ls` – visualise links in a directory (plan.md §2 Phase 1).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
