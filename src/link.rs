@@ -92,8 +92,15 @@ pub fn can_hardlink(target: &Path, link: &Path) -> bool {
 
 /// Compute the relative target string for a link stored at `link_path`.
 pub fn relative_target(target: &Path, link_path: &Path) -> PathBuf {
-    let link_dir = link_path.parent().unwrap_or(Path::new("."));
-    pathdiff::diff_paths(target, link_dir).unwrap_or_else(|| target.to_path_buf())
+    // A link with no directory component (bare "name", i.e. created in the
+    // current dir) is anchored at the CWD; otherwise `diff_paths` would be
+    // handed a relative base against an absolute target and fall back to
+    // storing the absolute path (undermining `--relative` and `git check`).
+    let link_dir = match link_path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+    };
+    pathdiff::diff_paths(target, &link_dir).unwrap_or_else(|| target.to_path_buf())
 }
 
 /// Absolute path a link's stored target string resolves to (relative targets
@@ -103,6 +110,17 @@ pub fn resolve_target(info: &LinkInfo) -> PathBuf {
         info.target.clone()
     } else {
         crate::fs::link_base_dir(&info.path).join(&info.target)
+    }
+}
+
+/// Strip the Windows verbatim-device prefix (`\\?\`) that `canonicalize()`
+/// returns, so paths shown to users / stored in manifests stay plain. No-op on
+/// paths without the prefix (and always a no-op on Unix).
+pub fn strip_verbatim(path: PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) => PathBuf::from(rest.to_string()),
+        None => path,
     }
 }
 
@@ -131,5 +149,19 @@ mod tests {
         let target = Path::new("C:/data/x");
         let link = Path::new("D:/proj/link");
         assert_eq!(relative_target(target, link), PathBuf::from("C:/data/x"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strip_verbatim_removes_device_prefix_only() {
+        assert_eq!(
+            strip_verbatim(PathBuf::from(r"\\?\C:\proj\libs")),
+            PathBuf::from(r"C:\proj\libs")
+        );
+        // a plain path is returned untouched
+        assert_eq!(
+            strip_verbatim(PathBuf::from(r"C:\proj\libs")),
+            PathBuf::from(r"C:\proj\libs")
+        );
     }
 }

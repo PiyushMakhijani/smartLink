@@ -1,8 +1,7 @@
-#![allow(dead_code)] // schema consumed by init/sync in Phase 3
+#![allow(dead_code)] // schema shared by init/sync (Phase 3) and git check (Phase 4)
 //! `.smartlink.json` manifest schema (draft v1, plan.md §2 Phase 3).
 //!
-//! The schema lives here already so `init`/`sync` (M3) and the unit tests
-//! (plan.md §5) can build on it; the commands are still pending.
+//! Types, parsing and validation used by the `init` and `sync` commands.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,6 +18,40 @@ pub enum LinkType {
     Hardlink,
     Junction,
     BindMount,
+}
+
+impl LinkType {
+    /// Map a detected runtime link kind to its manifest spelling.
+    pub fn from_kind(kind: crate::link::LinkKind) -> Self {
+        use crate::link::LinkKind as K;
+        match kind {
+            K::Symlink => LinkType::Symlink,
+            K::Hardlink => LinkType::Hardlink,
+            K::Junction => LinkType::Junction,
+            K::BindMount => LinkType::BindMount,
+        }
+    }
+
+    /// Map a manifest type back to the kind `make::create_link` understands.
+    pub fn to_kind(self) -> crate::link::LinkKind {
+        match self {
+            LinkType::Symlink => crate::link::LinkKind::Symlink,
+            LinkType::Hardlink => crate::link::LinkKind::Hardlink,
+            LinkType::Junction => crate::link::LinkKind::Junction,
+            LinkType::BindMount => crate::link::LinkKind::BindMount,
+        }
+    }
+}
+
+/// The `os_specific` key that matches the platform this binary runs on.
+pub fn current_os_key() -> &'static str {
+    if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    }
 }
 
 /// One declared link. `target` may be relative to the manifest directory.

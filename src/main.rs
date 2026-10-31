@@ -83,17 +83,36 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
-    /// Generate a .smartlink.json manifest from the current directory (Phase 3)
+    /// Generate a .smartlink.json manifest from the current directory
     Init {
+        /// Directory to scan (its links are recorded; defaults to current)
         #[arg(default_value = ".")]
         path: PathBuf,
+        /// Write the manifest somewhere other than <path>/.smartlink.json
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Free-text description stored in the manifest
+        #[arg(long)]
+        description: Option<String>,
+        /// Also record same-volume hardlink groups
+        #[arg(long)]
+        hardlinks: bool,
+        /// Print the manifest to stdout instead of writing a file
+        #[arg(long)]
+        dry_run: bool,
     },
-    /// Recreate all links defined in .smartlink.json (Phase 3)
+    /// Recreate all links defined in .smartlink.json
     Sync {
         #[arg(long, default_value = ".smartlink.json")]
         manifest: PathBuf,
+        /// Replace existing links that disagree with the manifest
+        #[arg(long)]
+        force: bool,
+        /// Report what would change without touching the filesystem
+        #[arg(long)]
+        dry_run: bool,
     },
-    /// Git integrations: manifest checks for CI (Phase 3)
+    /// Git integration: CI checks and auto-sync hooks
     Git {
         #[command(subcommand)]
         command: GitCommand,
@@ -102,8 +121,22 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum GitCommand {
-    /// Fail (exit 1) if any committed symlink in the repo uses an absolute target
+    /// Fail (exit 1) if any symlink in the tree uses an absolute target
     Check {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Install post-checkout / post-merge hooks that run `smartlink sync`
+    InstallHooks {
+        /// Repo (or any path inside it) to install hooks into
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Append to an existing hook that has no smartlink block
+        #[arg(long)]
+        force: bool,
+    },
+    /// Remove the smartlink block from installed hooks
+    UninstallHooks {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
@@ -126,10 +159,14 @@ fn main() -> anyhow::Result<()> {
             commands::convert::run(&link, &to, preserve_broken, yes),
         Commands::Fix { path, dry_run, yes } => commands::fix::run(&path, dry_run, yes),
         Commands::Dedupe { source, dest, force } => commands::dedupe::run(&source, &dest, force),
-        Commands::Init { path } => commands::pending(path, "init", "manifest generation".into()),
-        Commands::Sync { manifest } => commands::pending(manifest, "sync", "manifest replay".into()),
+        Commands::Init { path, out, description, hardlinks, dry_run } =>
+            commands::init::run(&path, out, description, hardlinks, dry_run),
+        Commands::Sync { manifest, force, dry_run } =>
+            commands::sync::run(&manifest, force, dry_run),
         Commands::Git { command } => match command {
-            GitCommand::Check { path } => commands::pending(path, "git check", "absolute-symlink CI check".into()),
+            GitCommand::Check { path } => commands::git::check(&path),
+            GitCommand::InstallHooks { path, force } => commands::git::install_hooks(&path, force),
+            GitCommand::UninstallHooks { path } => commands::git::uninstall_hooks(&path),
         },
     }
 }

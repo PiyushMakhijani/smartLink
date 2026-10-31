@@ -61,18 +61,82 @@ fn make_refuses_existing_link_without_force() {
     assert_eq!(std::fs::read(root.join("l.txt")).unwrap(), b"2");
 }
 
+// ----------------------------------------------------- M4: git integration --
+
+#[cfg(windows)]
 #[test]
-fn pending_commands_fail_with_milestone_hint() {
+fn git_check_flags_absolute_symlink() {
     let dir = tempfile::tempdir().unwrap();
-    for (cmd, arg) in [
-        ("init", "."),
-        ("sync", "--manifest=.smartlink.json"),
-        ("git", "check"),
-    ] {
-        let out = run(&[cmd, arg], dir.path());
-        assert!(!out.status.success(), "{cmd} should not be implemented yet");
-        assert!(String::from_utf8_lossy(&out.stderr).contains("plan.md"));
-    }
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("libs")).unwrap();
+    std::fs::write(root.join("libs/f.txt"), b"x").unwrap();
+    let abs = std::fs::canonicalize(root.join("libs/f.txt")).unwrap();
+
+    // An absolute target with no --relative is stored verbatim (non-portable).
+    let made = run(&["make", abs.to_str().unwrap(), "link.txt", "--symlink"], root);
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+
+    let chk = run(&["git", "check", "."], root);
+    assert!(!chk.status.success(), "absolute symlink should fail the check");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&chk.stdout),
+        String::from_utf8_lossy(&chk.stderr)
+    );
+    assert!(text.contains("absolute symlink"), "{text}");
+}
+
+#[test]
+fn git_check_passes_with_relative_symlink() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("libs")).unwrap();
+    std::fs::write(root.join("libs/f.txt"), b"x").unwrap();
+
+    // relative link path: `make --relative` must still store a relative target
+    let made = run(
+        &["make", "libs/f.txt", "link.txt", "--symlink", "--relative"],
+        root,
+    );
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+
+    let chk = run(&["git", "check", "."], root);
+    assert!(chk.status.success(), "{}", String::from_utf8_lossy(&chk.stderr));
+    assert!(String::from_utf8_lossy(&chk.stdout).contains("no absolute symlinks"));
+}
+
+#[test]
+fn git_install_and_uninstall_hooks_are_idempotent() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".git/hooks")).unwrap();
+
+    let inst = run(&["git", "install-hooks", "."], root);
+    assert!(inst.status.success(), "{}", String::from_utf8_lossy(&inst.stderr));
+
+    let hook = root.join(".git/hooks/post-merge");
+    assert!(hook.exists(), "post-merge hook should be installed");
+    let text = std::fs::read_to_string(&hook).unwrap();
+    assert!(text.contains("smartlink sync"), "{text}");
+    assert!(text.contains(">>> smartlink >>>"), "{text}");
+
+    // installing again refreshes (still exactly one managed block, no dupes)
+    assert!(run(&["git", "install-hooks", "."], root).status.success());
+    let text = std::fs::read_to_string(&hook).unwrap();
+    assert_eq!(text.matches(">>> smartlink >>>").count(), 1, "{text}");
+
+    // uninstall strips the block and removes the now-trivial hook file
+    let un = run(&["git", "uninstall-hooks", "."], root);
+    assert!(un.status.success(), "{}", String::from_utf8_lossy(&un.stderr));
+    assert!(!hook.exists(), "trivial hook should be deleted on uninstall");
+}
+
+#[test]
+fn git_install_hooks_requires_a_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(&["git", "install-hooks", "."], dir.path());
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("git repository"));
 }
 
 // ---------------------------------------------------------------- M2 -------
@@ -215,4 +279,97 @@ fn dedupe_clone_or_clean_error() {
         assert!(stderr.contains("CoW") || stderr.contains("cloning"), "{stderr}");
         assert!(!root.join("clone.bin").exists(), "failed clone must not leave debris");
     }
+}
+
+// ---------------------------------------------------------------- M3 -------
+
+#[test]
+fn init_records_live_symlinks_into_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("libs")).unwrap();
+    std::fs::write(root.join("libs/shared.txt"), b"payload").unwrap();
+
+    let link = root.join("src/link.txt");
+    let out = run(
+        &["make", "libs/shared.txt", link.to_str().unwrap(), "--symlink"],
+        root,
+    );
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let out = run(&["init", "."], root);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let text = std::fs::read_to_string(root.join(".smartlink.json")).unwrap();
+    let m: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(m["version"], 1);
+    let entries = m["links"].as_array().unwrap();
+    assert_eq!(entries.len(), 1, "manifest: {text}");
+    assert_eq!(entries[0]["type"], "symlink");
+    // both endpoints stored relative to the root
+    assert!(entries[0]["link"].as_str().unwrap().ends_with("link.txt"));
+    assert!(entries[0]["target"].as_str().unwrap().ends_with("shared.txt"));
+    assert!(!entries[0]["link"].as_str().unwrap().starts_with('/'));
+}
+
+#[test]
+fn sync_recreates_links_and_is_idempotent() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("libs/shared")).unwrap();
+    std::fs::write(root.join("libs/shared/data.txt"), b"payload").unwrap();
+
+    std::fs::write(
+        root.join(".smartlink.json"),
+        r#"{ "version": 1, "links": [
+            { "link": "src/shared", "target": "libs/shared", "type": "symlink" }
+        ] }"#,
+    )
+    .unwrap();
+
+    let out = run(&["sync"], root);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(std::fs::read(root.join("src/shared/data.txt")).unwrap(), b"payload");
+
+    // second run creates nothing new
+    let out = run(&["sync"], root);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("up to date"));
+}
+
+#[test]
+fn sync_reports_conflict_without_force_and_heals_with_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("libs/one")).unwrap();
+    std::fs::create_dir_all(root.join("libs/two")).unwrap();
+    std::fs::write(root.join("libs/one/data.txt"), b"1").unwrap();
+    std::fs::write(root.join("libs/two/data.txt"), b"2").unwrap();
+
+    let manifest = root.join(".smartlink.json");
+    std::fs::write(
+        &manifest,
+        r#"{ "version": 1, "links": [
+            { "link": "src/x", "target": "libs/one", "type": "symlink" }
+        ] }"#,
+    )
+    .unwrap();
+    assert!(run(&["sync"], root).status.success());
+
+    // retarget the manifest at libs/two; existing link now disagrees
+    std::fs::write(
+        &manifest,
+        r#"{ "version": 1, "links": [
+            { "link": "src/x", "target": "libs/two", "type": "symlink" }
+        ] }"#,
+    )
+    .unwrap();
+
+    let conflict = run(&["sync"], root);
+    assert!(!conflict.status.success(), "should flag a conflict");
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains("conflict"));
+
+    let forced = run(&["sync", "--force"], root);
+    assert!(forced.status.success(), "{}", String::from_utf8_lossy(&forced.stderr));
+    assert_eq!(std::fs::read(root.join("src/x/data.txt")).unwrap(), b"2");
 }

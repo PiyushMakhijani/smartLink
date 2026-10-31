@@ -6,11 +6,22 @@ and teammates. See [plan.md](plan.md) for the full roadmap.
 
 ## Status
 
-Phases 1–2 implemented: `make`, `ls`, plus the Manager commands `convert` (morph a
-link type), `fix` (auto-heal dead links by filename search) and `dedupe` (native
-CoW cloning via `FSCTL_DUPLICATE_EXTENTS_TO_FILE` / `FICLONE` / `clonefile`).
-Phase 3 (manifests via `init`/`sync` and git hooks) is stubbed and errors out with
-a milestone pointer.
+Phases 1–3 implemented (M1–M4). Everything the roadmap planned through the Git
+integration is live:
+
+- **Foundation** — `make` (auto-detection) and `ls` (color-coded, hardlinks
+  grouped by inode/file-id).
+- **Manager** — `convert` (morph a link type), `fix` (auto-heal dead links by
+  filename search), `dedupe` (native CoW cloning via
+  `FSCTL_DUPLICATE_EXTENTS_TO_FILE` / `FICLONE` / `clonefile`).
+- **Manifests** — `init` (generate `.smartlink.json` from live links) and `sync`
+  (recreate them, applying per-OS `os_specific` overrides).
+- **Git integration** — `git check` (CI guard that fails on committed absolute
+  symlinks) and `git install-hooks` / `git uninstall-hooks` (auto-`sync` on
+  `post-checkout` / `post-merge`).
+
+M5 (Polish: docs, Homebrew/Winget/Scoop/AUR packaging, CI matrix) is the only
+milestone still open. See [plan.md](plan.md).
 
 ## Quick start
 
@@ -36,6 +47,20 @@ smartlink fix . --yes
 
 # native copy-on-write clone (ReFS/NTFS-24H2, btrfs/XFS, APFS); never a plain copy
 smartlink dedupe base.bin snapshot.bin
+
+# capture the links in a project as a portable .smartlink.json manifest
+smartlink init . --hardlinks
+
+# replay a manifest on a fresh clone (idempotent; --force replaces mismatches)
+smartlink sync
+smartlink sync --dry-run
+
+# CI guard: fail if any committed symlink stores an absolute target
+smartlink git check .
+
+# install post-checkout / post-merge hooks that auto-run `smartlink sync`
+smartlink git install-hooks
+smartlink git uninstall-hooks
 ```
 
 On Windows, creating symlinks *and* junctions as a regular user requires Developer
