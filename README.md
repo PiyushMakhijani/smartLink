@@ -25,7 +25,8 @@ smartlink ls ./src
 smartlink ls ./data --hardlinks
 ```
 
-On Windows, plain symlinks need Developer Mode (or elevation); junctions do not.
+On Windows, creating symlinks *and* junctions as a regular user requires Developer
+Mode (the `SeCreateSymbolicLinkPrivilege`); administrators can do both directly.
 
 ## Building
 

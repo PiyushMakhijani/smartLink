@@ -3,7 +3,8 @@
 //! Detection reads the reparse tag via `GetFileInformationByHandleEx`
 //! (`FileAttributeTagInfo`), which is the only reliable way to tell a
 //! junction apart from a symlink. Junction creation uses
-//! `FSCTL_SET_REPARSE_POINT` directly, mirroring `mklink /J`.
+//! `FSCTL_SET_REPARSE_POINT` directly, mirroring `mklink /J` (both need
+//! SeCreateSymbolicLinkPrivilege for regular users = Developer Mode).
 
 use std::io;
 use std::os::windows::ffi::OsStrExt;
