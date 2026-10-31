@@ -38,6 +38,9 @@ pub fn create(
             }
             #[cfg(not(windows))]
             {
+                // macOS has no junctions and Linux bind mounts are privileged;
+                // the unix command layer maps --junction to BindMount itself.
+                let _ = (target_str, target_abs, link);
                 anyhow::bail!("junctions are a Windows-only concept; use --junction on Linux for a bind mount")
             }
         }
@@ -53,6 +56,46 @@ pub fn create(
                 )
             }
         }
+    }
+}
+
+/// Native Copy-on-Write clone (plan.md §2 Phase 2 `dedupe`): ReFS
+/// `FSCTL_DUPLICATE_EXTENTS_TO_FILE` on Windows, `FICLONE` on Linux,
+/// `clonefile` on macOS. Returns false when the operation is unsupported or
+/// not permitted by the filesystem — the caller then reports, never silently
+/// falls back to a space-eating plain copy.
+pub fn try_clone_file(target: &Path, link: &Path) -> anyhow::Result<bool> {
+    #[cfg(windows)]
+    {
+        windows::try_duplicate_extents(target, link)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        unix::try_ficclone(target, link)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(unix::try_clonefile(target, link))
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (target, link);
+        Ok(false)
+    }
+}
+
+/// Target-safe deletion of an existing link (or plain file/dir) so `--force`
+/// replacement, `convert` and `fix` can clear the old entry first. On Windows
+/// junctions need `RemoveDirectoryW` (std's `remove_dir` hits ACCESS_DENIED),
+/// so the OS layers own this decision.
+pub fn remove(path: &Path) -> anyhow::Result<()> {
+    #[cfg(windows)]
+    {
+        windows::remove(path)
+    }
+    #[cfg(unix)]
+    {
+        unix::remove(path)
     }
 }
 

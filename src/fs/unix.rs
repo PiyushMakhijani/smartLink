@@ -120,3 +120,74 @@ pub fn create_bind_mount(target: &Path, link: &Path) -> Result<()> {
     )
     .with_context(|| format!("bind mount {} -> {} failed (needs root/CAP_SYS_ADMIN)", target.display(), link.display()))
 }
+
+/// Target-safe deletion of an existing link (or plain file/dir). Symlinks and
+/// hardlinks are unlinked without touching their target; a Linux bind mount is
+/// unmounted first so the underlying directory is not deleted out from under it.
+pub fn remove(path: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(Some(info)) = detect(path) {
+            if info.kind == LinkKind::BindMount {
+                nix::mount::umount2(path, nix::mount::MntFlags::MNT_DETACH)
+                    .with_context(|| format!("could not unmount bind mount {}", path.display()))?;
+                let _ = std::fs::remove_dir(path);
+                return Ok(());
+            }
+        }
+    }
+    let meta = std::fs::symlink_metadata(path)
+        .with_context(|| format!("could not stat {}", path.display()))?;
+    if meta.is_dir() {
+        std::fs::remove_dir(path)
+    } else {
+        std::fs::remove_file(path)
+    }
+    .with_context(|| format!("could not remove {}", path.display()))
+}
+
+/// APFS `clonefile(2)` (macOS): fast, metadata-level CoW clone.
+/// Returns false when the filesystem refuses (non-APFS volume etc.).
+#[cfg(target_os = "macos")]
+pub fn try_clonefile(src: &Path, dest: &Path) -> bool {
+    use std::ffi::CString;
+    let c = |p: &Path| CString::new(p.as_os_str().to_string_lossy().as_ref());
+    match (c(src), c(dest)) {
+        (Ok(cs), Ok(cd)) => unsafe { libc::clonefile(cs.as_ptr(), cd.as_ptr(), 0) == 0 },
+        _ => false,
+    }
+}
+
+/// Linux `FICLONE` ioctl (btrfs / XFS / overlayfs CoW).
+/// Returns false when unsupported; `dest` must not exist for the ioctl.
+#[cfg(target_os = "linux")]
+pub fn try_ficclone(src: &Path, dest: &Path) -> Result<bool> {
+    use std::os::unix::io::AsRawFd;
+
+    // FICLONE = _IOR(0x94, 17, u32)
+    const FICLONE: libc::c_ulong = 0x4004_9411;
+
+    let src_file = std::fs::File::open(src)
+        .with_context(|| format!("could not open source {}", src.display()))?;
+    let dest_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dest)
+        .with_context(|| format!("could not create dest {}", dest.display()))?;
+    let rc = unsafe { libc::ioctl(dest_file.as_raw_fd(), FICLONE, src_file.as_raw_fd()) };
+    if rc != 0 {
+        let err = std::io::Error::last_os_error();
+        match err.raw_os_error() {
+            // EOPNOTSUPP / EINVAL: filesystem has no reflink support
+            Some(95) | Some(22) => {
+                let _ = std::fs::remove_file(dest);
+                return Ok(false);
+            }
+            _ => {
+                let _ = std::fs::remove_file(dest);
+                return Err(err.into());
+            }
+        }
+    }
+    Ok(true)
+}

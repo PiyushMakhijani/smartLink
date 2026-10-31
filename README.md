@@ -6,8 +6,11 @@ and teammates. See [plan.md](plan.md) for the full roadmap.
 
 ## Status
 
-Phase 1 (MVP) implemented: `make` + `ls`. Phases 2–3 (`convert`, `fix`, `dedupe`,
-manifests, git hooks) are stubbed and error out with a milestone pointer.
+Phases 1–2 implemented: `make`, `ls`, plus the Manager commands `convert` (morph a
+link type), `fix` (auto-heal dead links by filename search) and `dedupe` (native
+CoW cloning via `FSCTL_DUPLICATE_EXTENTS_TO_FILE` / `FICLONE` / `clonefile`).
+Phase 3 (manifests via `init`/`sync` and git hooks) is stubbed and errors out with
+a milestone pointer.
 
 ## Quick start
 
@@ -23,6 +26,16 @@ smartlink make ../config/app.yaml config/app.yaml --relative
 # inspect a directory (color-coded OK/DEAD, hardlinks grouped by inode/file-id)
 smartlink ls ./src
 smartlink ls ./data --hardlinks
+
+# convert one link type into another (safe: dead links need --preserve-broken)
+smartlink convert vendor\mylib --to symlink
+
+# auto-heal dead links by searching the tree for a matching filename
+smartlink fix . --dry-run
+smartlink fix . --yes
+
+# native copy-on-write clone (ReFS/NTFS-24H2, btrfs/XFS, APFS); never a plain copy
+smartlink dedupe base.bin snapshot.bin
 ```
 
 On Windows, creating symlinks *and* junctions as a regular user requires Developer

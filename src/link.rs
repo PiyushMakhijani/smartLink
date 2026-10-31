@@ -96,6 +96,16 @@ pub fn relative_target(target: &Path, link_path: &Path) -> PathBuf {
     pathdiff::diff_paths(target, link_dir).unwrap_or_else(|| target.to_path_buf())
 }
 
+/// Absolute path a link's stored target string resolves to (relative targets
+/// are anchored at the link's parent directory).
+pub fn resolve_target(info: &LinkInfo) -> PathBuf {
+    if info.target.is_absolute() {
+        info.target.clone()
+    } else {
+        crate::fs::link_base_dir(&info.path).join(&info.target)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

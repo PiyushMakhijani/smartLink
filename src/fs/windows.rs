@@ -12,14 +12,16 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+    CloseHandle, GENERIC_ALL, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, CreateHardLinkW, GetFileInformationByHandleEx, GetVolumePathNameW,
+    CreateFileW, CreateHardLinkW, GetFileInformationByHandleEx, GetVolumePathNameW, RemoveDirectoryW,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_INFO_BY_HANDLE_CLASS, FileAttributeTagInfo, FileStandardInfo, OPEN_EXISTING,
 };
-use windows_sys::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
+use windows_sys::Win32::System::Ioctl::{
+    FSCTL_DUPLICATE_EXTENTS_TO_FILE, FSCTL_SET_REPARSE_POINT, FSCTL_SET_SPARSE,
+};
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::SystemServices::{IO_REPARSE_TAG_MOUNT_POINT, IO_REPARSE_TAG_SYMLINK};
 
@@ -394,6 +396,171 @@ fn strip_verbatim_prefix(path: &Path) -> PathBuf {
         Some(rest) => PathBuf::from(rest.to_string()),
         None => path.to_path_buf(),
     }
+}
+
+/// True when `path` is an NTFS junction (mount-point reparse point), as
+/// opposed to a real directory or a symlink.
+fn is_junction(path: &Path) -> bool {
+    unsafe {
+        match open(path, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS) {
+            Ok(h) => {
+                let out = tag_and_attr(h)
+                    .map(|(tag, attr)| {
+                        attr & FILE_ATTRIBUTE_REPARSE_POINT != 0
+                            && tag == IO_REPARSE_TAG_MOUNT_POINT
+                    })
+                    .unwrap_or(false);
+                CloseHandle(h);
+                out
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+/// Delete whatever `path` is, target-safe.
+///
+/// * Junctions (mount-point reparse points) can't go through
+///   `std::fs::remove_dir` (it opens/validates the target and returns
+///   ERROR_ACCESS_DENIED); `RemoveDirectoryW` on the reparse point is the
+///   exact reverse of `mklink /J` and never touches the target contents.
+/// * A *directory* symlink must be removed with the directory API -
+///   `std::fs::remove_file` (DeleteFileW) fails on it with ERROR_ACCESS_DENIED -
+///   while a *file* symlink needs the file API. The target may be dead (so we
+///   can't stat it to learn the type), therefore we try one and fall back to the
+///   other, reporting the last error only if both fail.
+/// * Real files/hardlinks and plain directories use the matching std call.
+pub fn remove(path: &Path) -> Result<()> {
+    if is_junction(path) {
+        let ok = unsafe { RemoveDirectoryW(to_wide(path).as_ptr()) };
+        if ok == 0 {
+            return Err(anyhow!(io::Error::last_os_error())).with_context(|| {
+                format!("could not remove junction {}", path.display())
+            });
+        }
+        return Ok(());
+    }
+    let meta = std::fs::symlink_metadata(path)
+        .with_context(|| format!("could not stat {}", path.display()))?;
+    if meta.is_symlink() {
+        // Order-independent: try file delete, fall back to directory delete.
+        if std::fs::remove_file(path).is_ok() {
+            return Ok(());
+        }
+        std::fs::remove_dir(path)
+            .with_context(|| format!("could not remove symlink {}", path.display()))
+    } else if meta.is_dir() {
+        std::fs::remove_dir(path)
+            .with_context(|| format!("could not remove directory {}", path.display()))
+    } else {
+        std::fs::remove_file(path)
+            .with_context(|| format!("could not remove {}", path.display()))
+    }
+}
+
+/// ReFS/NTFS `FSCTL_DUPLICATE_EXTENTS_TO_FILE` chunk loop (dedupe backend).
+/// Opens `dest` fresh (creating it), marks it sparse and duplicates the whole
+/// extent chain of `src`. Unsupported layouts (plain NTFS < Windows 11 24H2,
+/// ReFS unavailable, misaligned small files) surface as an error instead of a
+/// silent plain copy.
+/// SAFETY: manual FILE_DUPLICATE_EXTENTS equivalent (u64/u32 fields, 24 bytes).
+#[repr(C)]
+struct FileDuplicateExtents {
+    source_file: HANDLE,
+    source_file_offset: u64,
+    length: u32,
+    _reserved: u32,
+    _reserved2: u64,
+}
+
+pub fn try_duplicate_extents(src: &Path, dest: &Path) -> Result<bool> {
+    let src_handle = unsafe {
+        open_raw(
+            src,
+            GENERIC_READ,
+            0x3,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+        )
+        .with_context(|| format!("could not open source {}", src.display()))?
+    };
+    let dest_handle = unsafe {
+        open_raw(
+            dest,
+            GENERIC_ALL,
+            0,
+            2, /* CREATE_ALWAYS */
+            FILE_FLAG_BACKUP_SEMANTICS,
+        )
+        .with_context(|| format!("could not create dest {}", dest.display()))?
+    };
+    let result = (|| -> Result<bool> {
+        let mut returned: u32 = 0;
+        unsafe {
+            // ReFS duplicates extents into sparse files; the call errors on
+            // layouts where CoW is not permitted.
+            if windows_sys::Win32::System::IO::DeviceIoControl(
+                dest_handle,
+                FSCTL_SET_SPARSE,
+                core::ptr::null_mut(),
+                0,
+                core::ptr::null_mut(),
+                0,
+                &mut returned,
+                core::ptr::null_mut(),
+            ) == 0
+            {
+                return Ok(false);
+            }
+        }
+        let len = std::fs::metadata(src)?.len();
+        const CHUNK: u64 = 1 << 30; // stay below the u32 Length field
+        let mut offset: u64 = 0;
+        while offset < len {
+            let n = (len - offset).min(CHUNK) as u32;
+            let req = FileDuplicateExtents {
+                source_file: src_handle,
+                source_file_offset: offset,
+                length: n,
+                _reserved: 0,
+                _reserved2: 0,
+            };
+            let ok = unsafe {
+                windows_sys::Win32::System::IO::DeviceIoControl(
+                    dest_handle,
+                    FSCTL_DUPLICATE_EXTENTS_TO_FILE,
+                    &req as *const _ as *const core::ffi::c_void,
+                    std::mem::size_of::<FileDuplicateExtents>() as u32,
+                    core::ptr::null_mut(),
+                    0,
+                    &mut returned,
+                    core::ptr::null_mut(),
+                )
+            };
+            if ok == 0 {
+                return Ok(false);
+            }
+            offset += n as u64;
+        }
+        // Duplicate extents do not extend the end-of-file; fix the size.
+        if len > 0 {
+            unsafe {
+                windows_sys::Win32::Storage::FileSystem::SetFilePointerEx(
+                    dest_handle,
+                    len as i64,
+                    core::ptr::null_mut(),
+                    0, /* FILE_BEGIN */
+                )
+            };
+            unsafe { windows_sys::Win32::Storage::FileSystem::SetEndOfFile(dest_handle) };
+        }
+        Ok(true)
+    })();
+    unsafe {
+        CloseHandle(src_handle);
+        CloseHandle(dest_handle);
+    }
+    result
 }
 
 // FILE_INFO_BY_HANDLE_CLASS is an i32 alias in windows-sys; keep the import

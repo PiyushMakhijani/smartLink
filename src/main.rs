@@ -50,23 +50,38 @@ pub enum Commands {
         #[arg(long)]
         hardlinks: bool,
     },
-    /// Convert an existing link into another type (Phase 2)
+    /// Convert an existing link into another type
     Convert {
+        /// Existing link (symlink / junction / hardlink) to morph
         link: PathBuf,
-        /// Target type: hard, symlink, junction
+        /// Target type: hard, symlink, junction, bind
         #[arg(long)]
-        to: Option<String>,
+        to: String,
+        /// Allow converting a link whose target is missing
+        #[arg(long)]
+        preserve_broken: bool,
+        /// Accept all interactive prompts
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
-    /// Auto-heal broken links by searching for matching files (Phase 2)
+    /// Auto-heal broken links by searching for matching files
     Fix {
-        /// Directory to scan for dead links
+        /// Project root to scan for dead links (and their replacements)
         #[arg(default_value = ".")]
         path: PathBuf,
+        /// Only report the replacement candidates, do not touch anything
+        #[arg(long)]
+        dry_run: bool,
+        /// Accept the first matching candidate for every dead link
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
-    /// Copy-on-write clone a file to save space (Phase 2)
+    /// Copy-on-write clone a file to save space (native FS APIs)
     Dedupe {
         source: PathBuf,
         dest: PathBuf,
+        #[arg(long)]
+        force: bool,
     },
     /// Generate a .smartlink.json manifest from the current directory (Phase 3)
     Init {
@@ -107,12 +122,10 @@ fn main() -> anyhow::Result<()> {
             force,
         } => commands::make::run(&target, &link, hard, symlink, junction, relative, force),
         Commands::Ls { path, hardlinks } => commands::ls::run(&path, hardlinks),
-        Commands::Convert { link, to } => {
-            let to = to.map(|t| format!("-> {t}")).unwrap_or_else(|| "type conversion".into());
-            commands::pending(link, "convert", to)
-        }
-        Commands::Fix { path } => commands::pending(path, "fix", "auto-heal".into()),
-        Commands::Dedupe { source, dest } => commands::pending(source, "dedupe", format!("clone -> {}", dest.display())),
+        Commands::Convert { link, to, preserve_broken, yes } =>
+            commands::convert::run(&link, &to, preserve_broken, yes),
+        Commands::Fix { path, dry_run, yes } => commands::fix::run(&path, dry_run, yes),
+        Commands::Dedupe { source, dest, force } => commands::dedupe::run(&source, &dest, force),
         Commands::Init { path } => commands::pending(path, "init", "manifest generation".into()),
         Commands::Sync { manifest } => commands::pending(manifest, "sync", "manifest replay".into()),
         Commands::Git { command } => match command {

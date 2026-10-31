@@ -1,6 +1,6 @@
 //! `smartlink make` – create a link with auto-detection.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
@@ -24,33 +24,66 @@ pub fn run(
             target.display().to_string().bold()
         );
     }
-    if symlink_metadata(link_path).is_ok() {
-        if !force {
-            bail!(
-                "{} already exists; pass --force to replace it",
-                link_path.display().to_string().bold()
-            );
-        }
-        remove_existing(link_path)?;
-    }
-
     let kind = choose_kind(target, link_path, hard, symlink, junction)?;
+    create_link(kind, target, link_path, force, relative)?;
+    println!(
+        "{} {kind} {} -> {}",
+        "created".green().bold(),
+        link_path.display(),
+        display_target(kind, target).display()
+    );
+    Ok(())
+}
+
+/// Shared creation path for `make` and `convert` (M2): validates the target
+/// per kind, decides the stored target string (relative vs absolute), removes
+/// an existing link when `force`, and creates through the OS abstraction.
+/// Returns the string stored inside the created link.
+pub fn create_link(
+    kind: LinkKind,
+    target: &Path,
+    link_path: &Path,
+    force: bool,
+    relative: bool,
+) -> Result<PathBuf> {
     // canonicalize() yields a verbatim (\\?\) path; strip it so the string we
     // store stays a plain Win32/POSIX path.
-    let strip = |p: std::path::PathBuf| -> std::path::PathBuf {
+    let strip = |p: PathBuf| -> PathBuf {
         let s = p.to_string_lossy().to_string();
         match s.strip_prefix(r"\\?\") {
-            Some(rest) => std::path::PathBuf::from(rest.to_string()),
+            Some(rest) => PathBuf::from(rest.to_string()),
             None => p,
         }
     };
-    let target_abs = strip(
-        target
-            .canonicalize()
-            .with_context(|| format!("could not resolve {}", target.display()))?,
-    );
+    let target_abs = match target.canonicalize() {
+        Ok(t) => strip(t),
+        Err(_) => {
+            if kind == LinkKind::Symlink {
+                target.to_path_buf()
+            } else {
+                bail!("target {} must exist", target.display());
+            }
+        }
+    };
+    match kind {
+        LinkKind::Hardlink => {
+            if !target_abs.is_file() {
+                bail!("hardlinks need an existing regular-file target");
+            }
+            if !crate::fs::same_volume(&target_abs, link_path) {
+                bail!("hardlink requires target and link on the same volume");
+            }
+        }
+        LinkKind::Junction | LinkKind::BindMount => {
+            // Junctions store absolute paths only, so --relative is ignored.
+            if !target_abs.exists() {
+                bail!("{kind} target {} must exist", target.display());
+            }
+        }
+        LinkKind::Symlink => {}
+    }
 
-    let target_str: std::path::PathBuf = match kind {
+    let target_str: PathBuf = match kind {
         // Junctions / bind mounts only store absolute paths; hardlinks store none.
         LinkKind::Junction | LinkKind::BindMount | LinkKind::Hardlink => target_abs.clone(),
         LinkKind::Symlink => {
@@ -64,6 +97,15 @@ pub fn run(
         }
     };
 
+    if symlink_metadata(link_path).is_ok() {
+        if !force {
+            bail!(
+                "{} already exists; pass --force to replace it",
+                link_path.display().to_string().bold()
+            );
+        }
+        remove_existing(link_path)?;
+    }
     if let Some(parent) = link_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             std::fs::create_dir_all(parent)
@@ -73,14 +115,17 @@ pub fn run(
 
     fs::create(kind, &target_str, &target_abs, link_path)
         .with_context(|| format!("failed to create {kind} at {}", link_path.display()))?;
+    Ok(target_str)
+}
 
-    println!(
-        "{} {kind} {} -> {}",
-        "created".green().bold(),
-        link_path.display(),
-        target_str.display()
-    );
-    Ok(())
+/// Best-effort string shown to the user for "what was linked to".
+fn display_target(kind: LinkKind, target: &Path) -> PathBuf {
+    match kind {
+        LinkKind::Symlink => target.to_path_buf(),
+        _ => target
+            .canonicalize()
+            .unwrap_or_else(|_| target.to_path_buf()),
+    }
 }
 
 fn choose_kind(target: &Path, link_path: &Path, hard: bool, symlink: bool, junction: bool) -> Result<LinkKind> {
@@ -139,12 +184,8 @@ fn symlink_metadata(path: &Path) -> std::io::Result<std::fs::Metadata> {
 }
 
 fn remove_existing(path: &Path) -> Result<()> {
-    let meta = symlink_metadata(path)?;
-    if meta.is_symlink() || meta.is_file() {
-        std::fs::remove_file(path)?;
-    } else if meta.is_dir() {
-        // A junction removed via remove_dir does not touch its target.
-        std::fs::remove_dir(path)?;
-    }
-    Ok(())
+    // Delegates to the OS layer: on Windows a junction must go through
+    // RemoveDirectoryW (std::fs::remove_dir returns ACCESS_DENIED there),
+    // while symlinks/hardlinks/plain entries use the std calls.
+    fs::remove(path)
 }
