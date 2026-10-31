@@ -128,7 +128,13 @@ fn display_target(kind: LinkKind, target: &Path) -> PathBuf {
     }
 }
 
-fn choose_kind(target: &Path, link_path: &Path, hard: bool, symlink: bool, junction: bool) -> Result<LinkKind> {
+fn choose_kind(
+    target: &Path,
+    link_path: &Path,
+    hard: bool,
+    symlink: bool,
+    junction: bool,
+) -> Result<LinkKind> {
     let requested = [hard, symlink, junction].iter().filter(|b| **b).count();
     if requested > 1 {
         bail!("--hard, --symlink and --junction are mutually exclusive");

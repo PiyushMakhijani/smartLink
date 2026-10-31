@@ -1,0 +1,92 @@
+name: Release
+
+# Builds a stripped release binary for each supported platform whenever a
+# `v*` tag is pushed, then attaches the archives to a GitHub Release. The
+# packaged Homebrew / Scoop / Winget manifests under `packaging/` consume these
+# assets.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/slink"
+          name="slink-${{ matrix.target }}"
+          mkdir -p "$name"
+          cp "$bin" "$name/"
+          cp LICENSE README.md "$name/"
+          tar czf "$name.${{ matrix.ext }}" "$name"
+          echo "asset=$name.${{ matrix.ext }}" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $name = "slink-${{ matrix.target }}"
+          # Portable single-file archive: slink.exe at the root, so winget
+          # (portable installer) and Scoop can both consume it directly.
+          Compress-Archive -Path "target/${{ matrix.target }}/release/slink.exe" -DestinationPath "$name.zip"
+          echo "asset=$name.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slink-${{ matrix.target }}
+          path: ${{ env.asset }}
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/**

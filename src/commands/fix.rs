@@ -9,16 +9,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-use crate::link::{self, LinkInfo, LinkKind};
 use super::make;
+use crate::link::{self, LinkInfo, LinkKind};
 
 pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
-    let root_abs = std::fs::canonicalize(root)
-        .with_context(|| format!("cannot scan {}", root.display()))?;
+    let root_abs =
+        std::fs::canonicalize(root).with_context(|| format!("cannot scan {}", root.display()))?;
     let mut dead = Vec::new();
     walk_collect(&root_abs, 0, &mut dead);
     if dead.is_empty() {
-        println!("{} no dead links found under {}", "◇".yellow(), root_abs.display());
+        println!(
+            "{} no dead links found under {}",
+            "◇".yellow(),
+            root_abs.display()
+        );
         return Ok(());
     }
     println!(
@@ -36,13 +40,13 @@ pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
             info.path.display().to_string().bold(),
             info.target.display().to_string().red()
         );
-        let wanted_dir = match std::fs::symlink_metadata(&link::resolve_target(info)) {
+        let wanted_dir = match std::fs::symlink_metadata(link::resolve_target(info)) {
             Ok(_) => false, // link of an unknown type: match by name only
             Err(_) => path_looks_like_dir(&info.target),
         };
         let mut candidates = Vec::new();
         search_matches(&root_abs, info, wanted_dir, &mut candidates);
-        candidates.sort_by(|a, b| a.cmp(b));
+        candidates.sort();
 
         if candidates.is_empty() {
             println!("    {}", "no matching file found".yellow());
@@ -52,7 +56,11 @@ pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
         for cand in &candidates {
             if !all {
                 let accept = dialoguer::Confirm::new()
-                    .with_prompt(format!("re-link {} to {}?", info.path.display(), cand.display()))
+                    .with_prompt(format!(
+                        "re-link {} to {}?",
+                        info.path.display(),
+                        cand.display()
+                    ))
                     .default(true)
                     .interact()?;
                 if !accept {
@@ -60,7 +68,11 @@ pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
                 }
             }
             if dry_run {
-                println!("    {} would re-link to {}", "dry-run".yellow(), cand.display());
+                println!(
+                    "    {} would re-link to {}",
+                    "dry-run".yellow(),
+                    cand.display()
+                );
                 handled = true;
                 break;
             }
@@ -75,7 +87,12 @@ pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
                 LinkKind::Symlink
             };
             make::create_link(kind, cand, &info.path, true, kind == LinkKind::Symlink)?;
-            println!("    {} {} -> {}", "healed".green().bold(), info.path.display(), cand.display());
+            println!(
+                "    {} {} -> {}",
+                "healed".green().bold(),
+                info.path.display(),
+                cand.display()
+            );
             healed += 1;
             handled = true;
             break;
@@ -85,7 +102,12 @@ pub fn run(root: &Path, dry_run: bool, all: bool) -> Result<()> {
         }
     }
     if !dry_run {
-        println!("{} {} of {} dead link(s)", "fixed".green().bold(), healed, dead.len());
+        println!(
+            "{} {} of {} dead link(s)",
+            "fixed".green().bold(),
+            healed,
+            dead.len()
+        );
     }
     Ok(())
 }
@@ -106,10 +128,14 @@ fn walk_collect(dir: &Path, depth: usize, out: &mut Vec<LinkInfo>) {
     if depth > 32 {
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
         if let Ok(Some(info)) = link::detect(&path) {
             if !info.alive {
                 out.push(info);
@@ -126,24 +152,26 @@ fn walk_collect(dir: &Path, depth: usize, out: &mut Vec<LinkInfo>) {
 /// size/hash comparison (plan.md §3), so matching is by filename and the
 /// file/dir expectation derived from the dead path.
 fn search_matches(dir: &Path, dead: &LinkInfo, wanted_dir: bool, out: &mut Vec<PathBuf>) {
-    let Some(name) = dead.target.file_name() else { return };
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Some(name) = dead.target.file_name() else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
         if path == dead.path {
             continue; // a link cannot be its own cure
         }
         if meta.file_type().is_symlink() {
             continue; // candidates must be real files/dirs
         }
-        if path.file_name() == Some(name) {
-            if meta.is_dir() {
-                out.push(path.clone());
-            } else if meta.is_file() && !wanted_dir {
-                out.push(path.clone());
-            }
-            // keep searching: a deeper identical name may also exist
+        // keep searching: a deeper identical name may also exist
+        if path.file_name() == Some(name) && (meta.is_dir() || (meta.is_file() && !wanted_dir)) {
+            out.push(path.clone());
         }
         if meta.is_dir() {
             search_matches(&path, dead, wanted_dir, out);

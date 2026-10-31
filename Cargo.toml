@@ -5,9 +5,14 @@ edition = "2021"
 autobins = false
 description = "Unified cross-platform CLI for symlinks, hardlinks, junctions and bind mounts"
 license = "MIT"
+authors = ["Piyush"]
+readme = "README.md"
+homepage = "https://github.com/piyush/smartlink"
 repository = "https://github.com/piyush/smartlink"
+documentation = "https://github.com/piyush/smartlink#readme"
 keywords = ["symlink", "hardlink", "junction", "cli", "filesystem"]
 categories = ["command-line-utilities", "filesystem"]
+exclude = ["plan.md", "scripts/", ".github/", "packaging/"]
 
 # Project/library is `smartlink`; the CLI is invoked as the shorter `slink`.
 [[bin]]

@@ -98,8 +98,13 @@ pub fn same_volume(a: &Path, b: &Path) -> bool {
 
 /// `ln` (hard) equivalent.
 pub fn create_hardlink(target: &Path, link: &Path) -> Result<()> {
-    nix::unistd::link(target, link)
-        .with_context(|| format!("hardlink {} -> {} failed (same filesystem, files only)", link.display(), target.display()))
+    nix::unistd::link(target, link).with_context(|| {
+        format!(
+            "hardlink {} -> {} failed (same filesystem, files only)",
+            link.display(),
+            target.display()
+        )
+    })
 }
 
 /// `ln -s` equivalent.
@@ -118,7 +123,13 @@ pub fn create_bind_mount(target: &Path, link: &Path) -> Result<()> {
         MsFlags::MS_BIND,
         Option::<&str>::None,
     )
-    .with_context(|| format!("bind mount {} -> {} failed (needs root/CAP_SYS_ADMIN)", target.display(), link.display()))
+    .with_context(|| {
+        format!(
+            "bind mount {} -> {} failed (needs root/CAP_SYS_ADMIN)",
+            target.display(),
+            link.display()
+        )
+    })
 }
 
 /// Target-safe deletion of an existing link (or plain file/dir). Symlinks and

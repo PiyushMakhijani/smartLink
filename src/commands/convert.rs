@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 
-use crate::link::{self, LinkKind};
 use super::make;
+use crate::link::{self, LinkKind};
 
 pub fn run(link_path: &Path, to: &str, preserve_broken: bool, yes: bool) -> Result<()> {
     let want = parse_want(to)?;

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: smartlink.slink
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: smartlink
+PublisherUrl: https://github.com/piyush/smartlink
+PublisherSupportUrl: https://github.com/piyush/smartlink/issues
+Author: Piyush
+PackageName: slink
+License: MIT
+LicenseUrl: https://github.com/piyush/smartlink/blob/main/LICENSE
+ShortDescription: Unified cross-platform CLI for symlinks, hardlinks, junctions and bind mounts
+Tags:
+  - symlink
+  - hardlink
+  - junction
+  - filesystem
+  - cli
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

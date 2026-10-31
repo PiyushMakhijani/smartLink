@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 
+use super::make;
 use crate::link::{self, LinkKind};
 use crate::manifest::{self, LinkEntry, LinkType, Manifest};
-use super::make;
 
 pub fn run(manifest_path: &Path, force: bool, dry_run: bool) -> Result<()> {
     let text = std::fs::read_to_string(manifest_path)
@@ -50,7 +50,11 @@ pub fn run(manifest_path: &Path, force: bool, dry_run: bool) -> Result<()> {
 
     println!(
         "{} {} created, {} up to date, {} conflict(s), {} error(s)",
-        if dry_run { "dry-run".yellow() } else { "sync".green().bold() },
+        if dry_run {
+            "dry-run".yellow()
+        } else {
+            "sync".green().bold()
+        },
         created.to_string().bold(),
         uptodate,
         conflicts.if_white_default(),
@@ -98,9 +102,7 @@ fn reconcile(
     let existing = link::detect(&link_abs)?;
     let matches = match &existing {
         Some(info) => {
-            info.kind == kind
-                && info.alive
-                && same_file(&link::resolve_target(info), &target_abs)
+            info.kind == kind && info.alive && same_file(&link::resolve_target(info), &target_abs)
         }
         None => false,
     };
@@ -132,7 +134,13 @@ fn reconcile(
     // Symlinks are recreated with a portable relative stored target; the other
     // kinds only ever store absolute paths.
     let relative = kind == LinkKind::Symlink;
-    make::create_link(kind, &target_abs, &link_abs, force || existing.is_some(), relative)?;
+    make::create_link(
+        kind,
+        &target_abs,
+        &link_abs,
+        force || existing.is_some(),
+        relative,
+    )?;
     println!(
         "  {} {kind} {} -> {}",
         "created".green().bold(),

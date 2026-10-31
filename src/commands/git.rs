@@ -23,8 +23,8 @@ const MANAGED_HOOKS: [&str; 2] = ["post-checkout", "post-merge"];
 
 /// Exit non-zero if any symlink under `path` stores an absolute target.
 pub fn check(path: &Path) -> Result<()> {
-    let root = std::fs::canonicalize(path)
-        .with_context(|| format!("cannot scan {}", path.display()))?;
+    let root =
+        std::fs::canonicalize(path).with_context(|| format!("cannot scan {}", path.display()))?;
     let mut offenders: Vec<(PathBuf, PathBuf)> = Vec::new();
     walk(&root, 0, &mut offenders);
 
@@ -116,7 +116,10 @@ pub fn uninstall_hooks(path: &Path) -> Result<()> {
                     println!("{} removed {name}", "hook".green().bold());
                 } else {
                     write_hook(&dest, &trimmed)?;
-                    println!("{} stripped smartlink block from {name}", "hook".green().bold());
+                    println!(
+                        "{} stripped smartlink block from {name}",
+                        "hook".green().bold()
+                    );
                 }
             }
             _ => println!("{} {name}: not installed", "-".dimmed()),
@@ -234,7 +237,9 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<(PathBuf, PathBuf)>) {
     if depth > 32 {
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path
@@ -244,7 +249,9 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<(PathBuf, PathBuf)>) {
         {
             continue;
         }
-        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
         if let Ok(Some(info)) = link::detect(&path) {
             // Only symlinks are committed by git; junctions / bind mounts are
             // machine-local and hardlinks show up as independent files.

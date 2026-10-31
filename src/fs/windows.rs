@@ -15,15 +15,18 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, GENERIC_ALL, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, CreateHardLinkW, GetFileInformationByHandleEx, GetVolumePathNameW, RemoveDirectoryW,
+    CreateFileW, CreateHardLinkW, FileAttributeTagInfo, FileStandardInfo,
+    GetFileInformationByHandleEx, GetVolumePathNameW, RemoveDirectoryW,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_INFO_BY_HANDLE_CLASS, FileAttributeTagInfo, FileStandardInfo, OPEN_EXISTING,
+    FILE_INFO_BY_HANDLE_CLASS, OPEN_EXISTING,
 };
 use windows_sys::Win32::System::Ioctl::{
     FSCTL_DUPLICATE_EXTENTS_TO_FILE, FSCTL_SET_REPARSE_POINT, FSCTL_SET_SPARSE,
 };
+use windows_sys::Win32::System::SystemServices::{
+    IO_REPARSE_TAG_MOUNT_POINT, IO_REPARSE_TAG_SYMLINK,
+};
 use windows_sys::Win32::System::IO::DeviceIoControl;
-use windows_sys::Win32::System::SystemServices::{IO_REPARSE_TAG_MOUNT_POINT, IO_REPARSE_TAG_SYMLINK};
 
 use crate::link::{LinkInfo, LinkKind};
 
@@ -126,26 +129,32 @@ pub fn detect(path: &Path) -> Result<Option<LinkInfo>> {
     };
     let is_link = meta.is_symlink()
         || unsafe {
-            open(path, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
-                .ok()
-                .map(|h| {
-                    let out = tag_and_attr(h)
-                        .map(|(tag, attr)| {
-                            attr & FILE_ATTRIBUTE_REPARSE_POINT != 0
-                                && (tag == IO_REPARSE_TAG_MOUNT_POINT || tag == IO_REPARSE_TAG_SYMLINK)
-                        })
-                        .unwrap_or(false);
-                    CloseHandle(h);
-                    out
-                })
-                .unwrap_or(false)
+            open(
+                path,
+                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+            )
+            .ok()
+            .map(|h| {
+                let out = tag_and_attr(h)
+                    .map(|(tag, attr)| {
+                        attr & FILE_ATTRIBUTE_REPARSE_POINT != 0
+                            && (tag == IO_REPARSE_TAG_MOUNT_POINT || tag == IO_REPARSE_TAG_SYMLINK)
+                    })
+                    .unwrap_or(false);
+                CloseHandle(h);
+                out
+            })
+            .unwrap_or(false)
         };
     if !is_link {
         return Ok(None);
     }
 
     let tag = unsafe {
-        let h = open(path, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)?;
+        let h = open(
+            path,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+        )?;
         let t = tag_and_attr(h).map(|(tag, _)| tag);
         CloseHandle(h);
         t
@@ -204,13 +213,8 @@ pub fn file_id(path: &Path) -> Result<Option<u64>> {
 
 fn volume_of(path: &Path) -> Option<String> {
     let mut buf = vec![0u16; 260];
-    let ok = unsafe {
-        GetVolumePathNameW(
-            to_wide(path).as_ptr(),
-            buf.as_mut_ptr(),
-            buf.len() as u32,
-        )
-    };
+    let ok =
+        unsafe { GetVolumePathNameW(to_wide(path).as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
     if ok != 0 {
         let end = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
         Some(String::from_utf16_lossy(&buf[..end]).to_uppercase())
@@ -224,9 +228,14 @@ fn root_prefix(path: &Path) -> Option<String> {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() >= 2 && chars[1] == ':' && chars[0].is_ascii_alphabetic() {
         Some(chars[0].to_ascii_uppercase().to_string())
-    } else if s.starts_with(r"\\") {
+    } else if let Some(rest) = s.strip_prefix(r"\\") {
         // UNC: server\share is the volume-equivalent prefix
-        Some(s[2..].split(['/', '\\']).take(2).collect::<Vec<_>>().join(r"\"))
+        Some(
+            rest.split(['/', '\\'])
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(r"\"),
+        )
     } else {
         None
     }
@@ -383,8 +392,13 @@ pub fn create_junction(target: &Path, link: &Path) -> Result<()> {
     if ok == 0 {
         let err = io::Error::last_os_error();
         let _ = std::fs::remove_dir(link); // roll back the placeholder
-        return Err(anyhow!(err))
-            .with_context(|| format!("could not create junction {} -> {}", link.display(), abs.display()));
+        return Err(anyhow!(err)).with_context(|| {
+            format!(
+                "could not create junction {} -> {}",
+                link.display(),
+                abs.display()
+            )
+        });
     }
     Ok(())
 }
@@ -402,7 +416,10 @@ fn strip_verbatim_prefix(path: &Path) -> PathBuf {
 /// opposed to a real directory or a symlink.
 fn is_junction(path: &Path) -> bool {
     unsafe {
-        match open(path, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS) {
+        match open(
+            path,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+        ) {
             Ok(h) => {
                 let out = tag_and_attr(h)
                     .map(|(tag, attr)| {
@@ -434,9 +451,8 @@ pub fn remove(path: &Path) -> Result<()> {
     if is_junction(path) {
         let ok = unsafe { RemoveDirectoryW(to_wide(path).as_ptr()) };
         if ok == 0 {
-            return Err(anyhow!(io::Error::last_os_error())).with_context(|| {
-                format!("could not remove junction {}", path.display())
-            });
+            return Err(anyhow!(io::Error::last_os_error()))
+                .with_context(|| format!("could not remove junction {}", path.display()));
         }
         return Ok(());
     }
@@ -453,8 +469,7 @@ pub fn remove(path: &Path) -> Result<()> {
         std::fs::remove_dir(path)
             .with_context(|| format!("could not remove directory {}", path.display()))
     } else {
-        std::fs::remove_file(path)
-            .with_context(|| format!("could not remove {}", path.display()))
+        std::fs::remove_file(path).with_context(|| format!("could not remove {}", path.display()))
     }
 }
 

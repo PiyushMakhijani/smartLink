@@ -13,10 +13,13 @@ use colored::Colorize;
 use crate::fs;
 
 pub fn run(src: &Path, dest: &Path, force: bool) -> Result<()> {
-    let meta = std::fs::metadata(src)
-        .with_context(|| format!("source {} not found", src.display()))?;
+    let meta =
+        std::fs::metadata(src).with_context(|| format!("source {} not found", src.display()))?;
     if !meta.is_file() {
-        bail!("dedupe clones regular files only ({} is not a file)", src.display());
+        bail!(
+            "dedupe clones regular files only ({} is not a file)",
+            src.display()
+        );
     }
     if dest.exists() {
         if !force {

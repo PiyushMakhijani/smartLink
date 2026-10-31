@@ -3,9 +3,9 @@
 //! All OS-specific syscalls live behind this module: the command layer only
 //! talks to [`create`] / [`detect`] / [`same_volume`].
 
-pub mod windows;
 #[cfg(unix)]
 pub mod unix;
+pub mod windows;
 
 use std::path::{Path, PathBuf};
 
@@ -143,5 +143,7 @@ fn existing_ancestor(path: &Path) -> std::path::PathBuf {
 
 /// Parent directory the link's target string is resolved against.
 pub fn link_base_dir(link: &Path) -> PathBuf {
-    link.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+    link.parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
 }

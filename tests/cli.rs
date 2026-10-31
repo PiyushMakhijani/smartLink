@@ -8,7 +8,11 @@ fn bin() -> &'static Path {
 }
 
 fn run(args: &[&str], cwd: &Path) -> std::process::Output {
-    Command::new(bin()).args(args).current_dir(cwd).output().unwrap()
+    Command::new(bin())
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap()
 }
 
 #[test]
@@ -20,11 +24,12 @@ fn make_hardlink_and_ls_on_windows_is_covered_by_unit_linking() {
     let link = root.join("copy.txt");
 
     // Auto-detection on the same volume must produce a hardlink for files.
-    let out = run(
-        &["make", "orig.txt", link.to_str().unwrap()],
-        root,
+    let out = run(&["make", "orig.txt", link.to_str().unwrap()], root);
+    assert!(
+        out.status.success(),
+        "make failed: {}",
+        String::from_utf8_lossy(&out.stderr)
     );
-    assert!(out.status.success(), "make failed: {}", String::from_utf8_lossy(&out.stderr));
     assert!(link.exists());
     assert_eq!(std::fs::read(&link).unwrap(), b"payload");
 
@@ -32,7 +37,10 @@ fn make_hardlink_and_ls_on_windows_is_covered_by_unit_linking() {
     assert!(out.status.success());
     let text = String::from_utf8_lossy(&out.stdout);
     // The two names share one inode/file-id, so ls must group them.
-    assert!(text.contains("hardlink"), "ls output missing hardlink group:\n{text}");
+    assert!(
+        text.contains("hardlink"),
+        "ls output missing hardlink group:\n{text}"
+    );
 }
 
 #[test]
@@ -57,7 +65,11 @@ fn make_refuses_existing_link_without_force() {
     assert!(!second.status.success(), "should refuse to overwrite");
 
     let forced = run(&["make", "b.txt", "l.txt", "--force"], root);
-    assert!(forced.status.success(), "{}", String::from_utf8_lossy(&forced.stderr));
+    assert!(
+        forced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&forced.stderr)
+    );
     assert_eq!(std::fs::read(root.join("l.txt")).unwrap(), b"2");
 }
 
@@ -73,11 +85,21 @@ fn git_check_flags_absolute_symlink() {
     let abs = std::fs::canonicalize(root.join("libs/f.txt")).unwrap();
 
     // An absolute target with no --relative is stored verbatim (non-portable).
-    let made = run(&["make", abs.to_str().unwrap(), "link.txt", "--symlink"], root);
-    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let made = run(
+        &["make", abs.to_str().unwrap(), "link.txt", "--symlink"],
+        root,
+    );
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
 
     let chk = run(&["git", "check", "."], root);
-    assert!(!chk.status.success(), "absolute symlink should fail the check");
+    assert!(
+        !chk.status.success(),
+        "absolute symlink should fail the check"
+    );
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&chk.stdout),
@@ -98,10 +120,18 @@ fn git_check_passes_with_relative_symlink() {
         &["make", "libs/f.txt", "link.txt", "--symlink", "--relative"],
         root,
     );
-    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
 
     let chk = run(&["git", "check", "."], root);
-    assert!(chk.status.success(), "{}", String::from_utf8_lossy(&chk.stderr));
+    assert!(
+        chk.status.success(),
+        "{}",
+        String::from_utf8_lossy(&chk.stderr)
+    );
     assert!(String::from_utf8_lossy(&chk.stdout).contains("no absolute symlinks"));
 }
 
@@ -112,7 +142,11 @@ fn git_install_and_uninstall_hooks_are_idempotent() {
     std::fs::create_dir_all(root.join(".git/hooks")).unwrap();
 
     let inst = run(&["git", "install-hooks", "."], root);
-    assert!(inst.status.success(), "{}", String::from_utf8_lossy(&inst.stderr));
+    assert!(
+        inst.status.success(),
+        "{}",
+        String::from_utf8_lossy(&inst.stderr)
+    );
 
     let hook = root.join(".git/hooks/post-merge");
     assert!(hook.exists(), "post-merge hook should be installed");
@@ -127,8 +161,15 @@ fn git_install_and_uninstall_hooks_are_idempotent() {
 
     // uninstall strips the block and removes the now-trivial hook file
     let un = run(&["git", "uninstall-hooks", "."], root);
-    assert!(un.status.success(), "{}", String::from_utf8_lossy(&un.stderr));
-    assert!(!hook.exists(), "trivial hook should be deleted on uninstall");
+    assert!(
+        un.status.success(),
+        "{}",
+        String::from_utf8_lossy(&un.stderr)
+    );
+    assert!(
+        !hook.exists(),
+        "trivial hook should be deleted on uninstall"
+    );
 }
 
 #[test]
@@ -155,13 +196,21 @@ fn convert_junction_to_symlink() {
         &["make", "libs", link.to_str().unwrap(), "--junction"],
         root,
     );
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let out = run(
         &["convert", link.to_str().unwrap(), "--to", "symlink"],
         root,
     );
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_eq!(std::fs::read(link.join("api.txt")).unwrap(), b"x");
 
     // ls must now report it as a symlink, still OK (scan the parent dir,
@@ -186,11 +235,11 @@ fn convert_junction_dir_to_hardlink_fails_gracefully() {
     );
     assert!(out.status.success());
 
-    let out = run(
-        &["convert", link.to_str().unwrap(), "--to", "hard"],
-        root,
+    let out = run(&["convert", link.to_str().unwrap(), "--to", "hard"], root);
+    assert!(
+        !out.status.success(),
+        "junction dirs cannot become hardlinks"
     );
-    assert!(!out.status.success(), "junction dirs cannot become hardlinks");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.to_lowercase().contains("hardlink"), "{err}");
     // the original junction must still be intact
@@ -211,7 +260,11 @@ fn fix_heals_dead_junction_and_convert_requires_preserve_broken() {
         &["make", "libs/src", link.to_str().unwrap(), "--junction"],
         root,
     );
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // move the real directory so the junction goes dead, keeping the leaf
     // name `src` so `fix`'s filename search can locate the replacement.
@@ -219,13 +272,20 @@ fn fix_heals_dead_junction_and_convert_requires_preserve_broken() {
     std::fs::rename(root.join("libs/src"), root.join("relocated/src")).unwrap();
 
     // convert refuses without --preserve-broken
-    let out = run(&["convert", link.to_str().unwrap(), "--to", "symlink"], root);
+    let out = run(
+        &["convert", link.to_str().unwrap(), "--to", "symlink"],
+        root,
+    );
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("--preserve-broken"));
 
     // fix finds the moved directory by name and re-links
     let out = run(&["fix", ".", "--yes"], root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_eq!(std::fs::read(link.join("data.txt")).unwrap(), b"payload");
 }
 
@@ -239,11 +299,20 @@ fn fix_dry_run_touches_nothing() {
     std::fs::write(root.join("libs/src/data.txt"), b"p").unwrap();
 
     let link = root.join("vendor/l");
-    assert!(run(&["make", "libs/src", link.to_str().unwrap(), "--junction"], root).status.success());
+    assert!(run(
+        &["make", "libs/src", link.to_str().unwrap(), "--junction"],
+        root
+    )
+    .status
+    .success());
     std::fs::remove_dir_all(root.join("libs/src")).unwrap();
 
     let out = run(&["fix", ".", "--yes", "--dry-run"], root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     // the dead junction still points nowhere
     assert!(!link.join("data.txt").exists());
 }
@@ -276,8 +345,14 @@ fn dedupe_clone_or_clean_error() {
         assert_eq!(std::fs::read(root.join("clone.bin")).unwrap(), payload);
     } else {
         // Explicit refusal with guidance, and nothing left behind.
-        assert!(stderr.contains("CoW") || stderr.contains("cloning"), "{stderr}");
-        assert!(!root.join("clone.bin").exists(), "failed clone must not leave debris");
+        assert!(
+            stderr.contains("CoW") || stderr.contains("cloning"),
+            "{stderr}"
+        );
+        assert!(
+            !root.join("clone.bin").exists(),
+            "failed clone must not leave debris"
+        );
     }
 }
 
@@ -292,13 +367,26 @@ fn init_records_live_symlinks_into_manifest() {
 
     let link = root.join("src/link.txt");
     let out = run(
-        &["make", "libs/shared.txt", link.to_str().unwrap(), "--symlink"],
+        &[
+            "make",
+            "libs/shared.txt",
+            link.to_str().unwrap(),
+            "--symlink",
+        ],
         root,
     );
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let out = run(&["init", "."], root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let text = std::fs::read_to_string(root.join(".smartlink.json")).unwrap();
     let m: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -308,7 +396,10 @@ fn init_records_live_symlinks_into_manifest() {
     assert_eq!(entries[0]["type"], "symlink");
     // both endpoints stored relative to the root
     assert!(entries[0]["link"].as_str().unwrap().ends_with("link.txt"));
-    assert!(entries[0]["target"].as_str().unwrap().ends_with("shared.txt"));
+    assert!(entries[0]["target"]
+        .as_str()
+        .unwrap()
+        .ends_with("shared.txt"));
     assert!(!entries[0]["link"].as_str().unwrap().starts_with('/'));
 }
 
@@ -328,12 +419,23 @@ fn sync_recreates_links_and_is_idempotent() {
     .unwrap();
 
     let out = run(&["sync"], root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(std::fs::read(root.join("src/shared/data.txt")).unwrap(), b"payload");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        std::fs::read(root.join("src/shared/data.txt")).unwrap(),
+        b"payload"
+    );
 
     // second run creates nothing new
     let out = run(&["sync"], root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains("up to date"));
 }
 
@@ -370,6 +472,10 @@ fn sync_reports_conflict_without_force_and_heals_with_it() {
     assert!(String::from_utf8_lossy(&conflict.stderr).contains("conflict"));
 
     let forced = run(&["sync", "--force"], root);
-    assert!(forced.status.success(), "{}", String::from_utf8_lossy(&forced.stderr));
+    assert!(
+        forced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&forced.stderr)
+    );
     assert_eq!(std::fs::read(root.join("src/x/data.txt")).unwrap(), b"2");
 }

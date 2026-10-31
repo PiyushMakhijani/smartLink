@@ -106,11 +106,17 @@ impl Manifest {
             }
             for key in entry.os_specific.keys() {
                 if !matches!(key.as_str(), "windows" | "linux" | "macos") {
-                    anyhow::bail!("unknown os_specific key '{key}' for {}", entry.link.display());
+                    anyhow::bail!(
+                        "unknown os_specific key '{key}' for {}",
+                        entry.link.display()
+                    );
                 }
             }
             if entry.link.is_absolute() {
-                anyhow::bail!("link path must be relative to the repo: {}", entry.link.display());
+                anyhow::bail!(
+                    "link path must be relative to the repo: {}",
+                    entry.link.display()
+                );
             }
         }
         Ok(())
@@ -165,6 +171,9 @@ mod tests {
         };
         let json = serde_json::to_string(&m).unwrap();
         let back = Manifest::parse(&json).unwrap();
-        assert_eq!(back.links[0].os_specific["windows"].link_type, Some(LinkType::Junction));
+        assert_eq!(
+            back.links[0].os_specific["windows"].link_type,
+            Some(LinkType::Junction)
+        );
     }
 }

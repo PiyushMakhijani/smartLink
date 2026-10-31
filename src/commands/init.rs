@@ -28,13 +28,19 @@ pub fn run(
     dry_run: bool,
 ) -> Result<()> {
     let root_abs = link::strip_verbatim(
-        std::fs::canonicalize(root)
-            .with_context(|| format!("cannot scan {}", root.display()))?,
+        std::fs::canonicalize(root).with_context(|| format!("cannot scan {}", root.display()))?,
     );
 
     let mut links: Vec<LinkEntry> = Vec::new();
     let mut hard_groups: BTreeMap<u64, Vec<PathBuf>> = BTreeMap::new();
-    walk(&root_abs, &root_abs, 0, include_hardlinks, &mut links, &mut hard_groups);
+    walk(
+        &root_abs,
+        &root_abs,
+        0,
+        include_hardlinks,
+        &mut links,
+        &mut hard_groups,
+    );
 
     if include_hardlinks {
         for (_id, names) in hard_groups {
@@ -83,8 +89,7 @@ pub fn run(
 /// Path relative to `root`, falling back to the absolute path (verbatim prefix
 /// stripped) when there is no common ancestor, e.g. a junction to another drive.
 fn rel(path: &Path, root: &Path) -> PathBuf {
-    pathdiff::diff_paths(path, root)
-        .unwrap_or_else(|| link::strip_verbatim(path.to_path_buf()))
+    pathdiff::diff_paths(path, root).unwrap_or_else(|| link::strip_verbatim(path.to_path_buf()))
 }
 
 /// Recursive walk. Detects reparse links directly and, when asked, buckets
@@ -101,13 +106,21 @@ fn walk(
     if depth > 32 {
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.file_name().map(|n| n == DEFAULT_MANIFEST_NAME).unwrap_or(false) {
+        if path
+            .file_name()
+            .map(|n| n == DEFAULT_MANIFEST_NAME)
+            .unwrap_or(false)
+        {
             continue; // never capture our own output
         }
-        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
 
         if let Ok(Some(info)) = link::detect(&path) {
             // A reparse link: store its resolved (absolute) target so `sync`
@@ -123,7 +136,14 @@ fn walk(
         }
 
         if meta.is_dir() {
-            walk(&path, root, depth + 1, include_hardlinks, links, hard_groups);
+            walk(
+                &path,
+                root,
+                depth + 1,
+                include_hardlinks,
+                links,
+                hard_groups,
+            );
         } else if include_hardlinks && meta.is_file() {
             if let (Ok(n), Ok(Some(id))) = (link::hardlink_count(&path), link::file_id(&path)) {
                 if n > 1 {

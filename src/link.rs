@@ -132,7 +132,10 @@ mod tests {
     fn relative_target_walks_up_to_common_ancestor() {
         let target = Path::new("/proj/libs/shared");
         let link = Path::new("/proj/src/utils");
-        assert_eq!(relative_target(target, link), PathBuf::from("../libs/shared"));
+        assert_eq!(
+            relative_target(target, link),
+            PathBuf::from("../libs/shared")
+        );
     }
 
     #[test]

@@ -1,0 +1,27 @@
+{
+  "version": "0.1.0",
+  "description": "Unified cross-platform CLI for symlinks, hardlinks, junctions and bind mounts",
+  "homepage": "https://github.com/piyush/smartlink",
+  "license": "MIT",
+  "notes": "First install of 0.1.0. See https://github.com/piyush/smartlink#readme",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/piyush/smartlink/releases/download/v0.1.0/slink-x86_64-pc-windows-msvc.zip",
+      "hash": "REPLACE_WITH_SHA256_OF_THE_WINDOWS_ZIP",
+      "bin": ["slink.exe"]
+    }
+  },
+  "checkver": {
+    "github": "https://github.com/piyush/smartlink"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/piyush/smartlink/releases/download/v$version/slink-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "hash": {
+      "mode": "download"
+    }
+  }
+}

@@ -2,6 +2,10 @@
 
 ![smartlink logo](logo.png)
 
+[![CI](https://github.com/piyush/smartlink/actions/workflows/ci.yml/badge.svg)](https://github.com/piyush/smartlink/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
+
 Unified cross-platform CLI for filesystem links — symlinks, hardlinks, junctions and
 bind mounts. Stops links from breaking when projects move between machines, drives
 and teammates. The project is **smartlink**; the CLI is invoked as the shorter
@@ -9,8 +13,8 @@ and teammates. The project is **smartlink**; the CLI is invoked as the shorter
 
 ## Status
 
-Phases 1–3 implemented (M1–M4). Everything the roadmap planned through the Git
-integration is live:
+The full roadmap is now implemented (M1–M5). Everything the plan called for
+through packaging and CI is live:
 
 - **Foundation** — `make` (auto-detection) and `ls` (color-coded, hardlinks
   grouped by inode/file-id).
@@ -22,9 +26,35 @@ integration is live:
 - **Git integration** — `git check` (CI guard that fails on committed absolute
   symlinks) and `git install-hooks` / `git uninstall-hooks` (auto-`sync` on
   `post-checkout` / `post-merge`).
+- **Polish** — CI matrix (Linux/macOS/Windows: fmt, clippy, build, test), a
+  tag-triggered release workflow that ships cross-platform binaries, and
+  Homebrew/Scoop/Winget packaging templates under [`packaging/`](packaging).
 
-M5 (Polish: docs, Homebrew/Winget/Scoop/AUR packaging, CI matrix) is the only
-milestone still open. See [plan.md](plan.md).
+See [plan.md](plan.md) for the full roadmap.
+
+## Installation
+
+Pre-built binaries are attached to each [GitHub
+Release](https://github.com/piyush/smartlink/releases). Package managers install
+the `slink` command:
+
+```sh
+# Cargo (any platform)
+cargo install smartlink
+
+# Homebrew (macOS / Linux)
+brew tap piyush/slink && brew install slink
+
+# Scoop (Windows)
+scoop bucket add slink https://github.com/piyush/scoop-bucket && scoop install slink
+
+# Winget (Windows)
+winget install smartlink.slink
+```
+
+Recipes and the placeholders to fill before submitting live in
+[`packaging/README.md`](packaging/README.md). To build from source, see
+[Building](#building) below.
 
 ## Quick start
 
@@ -87,4 +117,4 @@ cargo test              # unit + integration tests
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

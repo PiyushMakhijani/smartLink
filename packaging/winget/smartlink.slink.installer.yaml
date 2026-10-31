@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+#
+# Template: fill Sha256 with `wingetcreate update smartlink.slink` (it downloads
+# the asset and hashes it for you) before opening the winget-pkgs PR. The
+# `portable` installer type expects the archive to expose a single `slink.exe`.
+
+PackageIdentifier: smartlink.slink
+PackageVersion: 0.1.0
+InstallerLocale: en-US
+Platform:
+  - Windows
+InstallerType: portable
+Commands:
+  - slink
+ReleaseDate: "2026-01-01"
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/piyush/smartlink/releases/download/v0.1.0/slink-x86_64-pc-windows-msvc.zip
+    InstallerSha256: REPLACE_WITH_SHA256_OF_THE_WINDOWS_ZIP
+ManifestType: installer
+ManifestVersion: 1.6.0

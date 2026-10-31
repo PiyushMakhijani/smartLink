@@ -155,14 +155,30 @@ fn main() -> anyhow::Result<()> {
             force,
         } => commands::make::run(&target, &link, hard, symlink, junction, relative, force),
         Commands::Ls { path, hardlinks } => commands::ls::run(&path, hardlinks),
-        Commands::Convert { link, to, preserve_broken, yes } =>
-            commands::convert::run(&link, &to, preserve_broken, yes),
+        Commands::Convert {
+            link,
+            to,
+            preserve_broken,
+            yes,
+        } => commands::convert::run(&link, &to, preserve_broken, yes),
         Commands::Fix { path, dry_run, yes } => commands::fix::run(&path, dry_run, yes),
-        Commands::Dedupe { source, dest, force } => commands::dedupe::run(&source, &dest, force),
-        Commands::Init { path, out, description, hardlinks, dry_run } =>
-            commands::init::run(&path, out, description, hardlinks, dry_run),
-        Commands::Sync { manifest, force, dry_run } =>
-            commands::sync::run(&manifest, force, dry_run),
+        Commands::Dedupe {
+            source,
+            dest,
+            force,
+        } => commands::dedupe::run(&source, &dest, force),
+        Commands::Init {
+            path,
+            out,
+            description,
+            hardlinks,
+            dry_run,
+        } => commands::init::run(&path, out, description, hardlinks, dry_run),
+        Commands::Sync {
+            manifest,
+            force,
+            dry_run,
+        } => commands::sync::run(&manifest, force, dry_run),
         Commands::Git { command } => match command {
             GitCommand::Check { path } => commands::git::check(&path),
             GitCommand::InstallHooks { path, force } => commands::git::install_hooks(&path, force),
