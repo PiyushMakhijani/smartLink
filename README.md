@@ -11,28 +11,6 @@ bind mounts. Stops links from breaking when projects move between machines, driv
 and teammates. The project is **smartlink**; the CLI is invoked as the shorter
 **`slink`**. See [plan.md](plan.md) for the full roadmap.
 
-## Status
-
-The full roadmap is now implemented (M1–M5). Everything the plan called for
-through packaging and CI is live:
-
-- **Foundation** — `make` (auto-detection) and `ls` (color-coded, hardlinks
-  grouped by inode/file-id).
-- **Manager** — `convert` (morph a link type), `fix` (auto-heal dead links by
-  filename search), `dedupe` (native CoW cloning via
-  `FSCTL_DUPLICATE_EXTENTS_TO_FILE` / `FICLONE` / `clonefile`).
-- **Manifests** — `init` (generate `.smartlink.json` from live links) and `sync`
-  (recreate them, applying per-OS `os_specific` overrides).
-- **Git integration** — `git check` (CI guard that fails on committed absolute
-  symlinks) and `git install-hooks` / `git uninstall-hooks` (auto-`sync` on
-  `post-checkout` / `post-merge`).
-- **Diagnostics** — `doctor` (link health report, including broken and circular
-  links) and `watch` (poll for link changes, with optional unambiguous repair).
-- **Polish** — CI matrix (Linux/macOS/Windows: fmt, clippy, build, test), a
-  tag-triggered release workflow that ships cross-platform binaries, and
-  Homebrew/Scoop/Winget packaging templates under [`packaging/`](packaging).
-
-See [plan.md](plan.md) for the full roadmap.
 
 ## Installation
 
