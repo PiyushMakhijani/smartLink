@@ -9,7 +9,7 @@
 Unified cross-platform CLI for filesystem links — symlinks, hardlinks, junctions and
 bind mounts. Stops links from breaking when projects move between machines, drives
 and teammates. The project is **smartlink**; the CLI is invoked as the shorter
-**`slink`**. See [plan.md](plan.md) for the full roadmap.
+**`slink`**.
 
 
 ## Installation
@@ -19,16 +19,16 @@ Release](https://github.com/piyush/smartlink/releases). Package managers install
 the `slink` command:
 
 ```sh
-# Cargo (any platform)
+# Cargo (any platform) to be added soon
 cargo install smartlink
 
-# Homebrew (macOS / Linux)
+# Homebrew (macOS / Linux) to be added soon
 brew tap piyush/slink && brew install slink
 
-# Scoop (Windows)
+# Scoop (Windows) to be added soon
 scoop bucket add slink https://github.com/piyush/scoop-bucket && scoop install slink
 
-# Winget (Windows)
+# Winget (Windows) to be added soon
 winget install smartlink.slink
 ```
 
