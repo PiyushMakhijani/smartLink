@@ -1,15 +1,15 @@
 [package]
 name = "smartlink"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 autobins = false
 description = "Unified cross-platform CLI for symlinks, hardlinks, junctions and bind mounts"
 license = "MIT"
 authors = ["Piyush"]
 readme = "README.md"
-homepage = "https://github.com/piyush/smartlink"
-repository = "https://github.com/piyush/smartlink"
-documentation = "https://github.com/piyush/smartlink#readme"
+homepage = "https://github.com/PiyushMakhijani/smartLink"
+repository = "https://github.com/PiyushMakhijani/smartLink"
+documentation = "https://github.com/PiyushMakhijani/smartLink#readme"
 keywords = ["symlink", "hardlink", "junction", "cli", "filesystem"]
 categories = ["command-line-utilities", "filesystem"]
 exclude = ["plan.md", "scripts/", ".github/", "packaging/"]
