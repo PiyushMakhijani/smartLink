@@ -82,8 +82,18 @@ pub struct Manifest {
     pub version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// OS the manifest was exported from (portable manifests only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_os: Option<String>,
+    /// Set by `slink export --portable`: paths use `/`, targets are relative.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub portable: bool,
     #[serde(default)]
     pub links: Vec<LinkEntry>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Manifest {
@@ -156,6 +166,8 @@ mod tests {
         let m = Manifest {
             version: 1,
             description: None,
+            source_os: None,
+            portable: false,
             links: vec![LinkEntry {
                 link: PathBuf::from("data"),
                 target: PathBuf::from("../big-data"),

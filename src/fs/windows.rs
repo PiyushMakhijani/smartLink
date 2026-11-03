@@ -15,8 +15,8 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, GENERIC_ALL, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, CreateHardLinkW, FileAttributeTagInfo, FileStandardInfo,
-    GetFileInformationByHandleEx, GetVolumePathNameW, RemoveDirectoryW,
+    CreateFileW, CreateHardLinkW, FileAttributeTagInfo, GetFileInformationByHandle,
+    GetFileInformationByHandleEx, GetVolumePathNameW, RemoveDirectoryW, BY_HANDLE_FILE_INFORMATION,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_INFO_BY_HANDLE_CLASS, OPEN_EXISTING,
 };
@@ -60,27 +60,10 @@ unsafe fn tag_and_attr(handle: HANDLE) -> Option<(u32, u32)> {
 }
 
 unsafe fn links_and_ids(handle: HANDLE) -> Option<(u32, u64)> {
-    #[repr(C)]
-    struct StandardInfoStruct {
-        file_id: i64,
-        n_links: u32,
-        file_size: i64,
-        allocation_size: i64,
-    }
-    let mut info = StandardInfoStruct {
-        file_id: 0,
-        n_links: 0,
-        file_size: 0,
-        allocation_size: 0,
-    };
-    let ok = GetFileInformationByHandleEx(
-        handle,
-        FileStandardInfo,
-        &mut info as *mut _ as *mut core::ffi::c_void,
-        std::mem::size_of::<StandardInfoStruct>() as u32,
-    );
-    if ok != 0 {
-        Some((info.n_links, info.file_id as u64))
+    let mut info: BY_HANDLE_FILE_INFORMATION = std::mem::zeroed();
+    if GetFileInformationByHandle(handle, &mut info) != 0 {
+        let id = ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64;
+        Some((info.nNumberOfLinks, id))
     } else {
         None
     }

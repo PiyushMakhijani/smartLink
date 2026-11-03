@@ -73,6 +73,35 @@ fn make_refuses_existing_link_without_force() {
     assert_eq!(std::fs::read(root.join("l.txt")).unwrap(), b"2");
 }
 
+#[test]
+fn doctor_reports_circular_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("second", root.join("first")).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file("second", root.join("first")).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("first", root.join("second")).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file("first", root.join("second")).unwrap();
+
+    let out = run(&["doctor", ".", "--verbose"], root);
+    assert!(!out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("Circular references:"), "{text}");
+    assert!(text.contains("circular reference"), "{text}");
+    assert!(!text.contains("Broken links:"), "{text}");
+}
+
+#[test]
+fn watch_rejects_zero_interval() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(&["watch", ".", "--interval", "0"], dir.path());
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("at least 1 second"));
+}
+
 // ----------------------------------------------------- M4: git integration --
 
 #[cfg(windows)]
@@ -478,4 +507,201 @@ fn sync_reports_conflict_without_force_and_heals_with_it() {
         String::from_utf8_lossy(&forced.stderr)
     );
     assert_eq!(std::fs::read(root.join("src/x/data.txt")).unwrap(), b"2");
+}
+
+// ---------------------------------------------------------------------------
+// Profiles, transactions, portable manifests and the advanced commands.
+// ---------------------------------------------------------------------------
+
+fn run_home(args: &[&str], cwd: &Path, home: &Path) -> std::process::Output {
+    Command::new(bin())
+        .args(args)
+        .current_dir(cwd)
+        .env("SLINK_HOME", home)
+        .output()
+        .unwrap()
+}
+
+fn text(o: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    )
+}
+
+#[test]
+fn profiles_create_use_list() {
+    let home = tempfile::tempdir().unwrap();
+    let cwd = tempfile::tempdir().unwrap();
+    let ok = |args: &[&str]| {
+        let o = run_home(args, cwd.path(), home.path());
+        assert!(o.status.success(), "{args:?}: {}", text(&o));
+        text(&o)
+    };
+    ok(&[
+        "profile",
+        "create",
+        "development",
+        "--set",
+        "default_type=symlink",
+    ]);
+    ok(&["profile", "create", "server"]);
+    ok(&["profile", "use", "development"]);
+    let list = ok(&["profile", "list"]);
+    assert!(list.contains("* development"), "{list}");
+    assert!(list.contains("server"));
+    let o = run_home(&["profile", "use", "missing"], cwd.path(), home.path());
+    assert!(!o.status.success());
+    let o = run_home(
+        &["profile", "create", "bad", "--set", "default_type=nonsense"],
+        cwd.path(),
+        home.path(),
+    );
+    assert!(!o.status.success());
+}
+
+#[test]
+fn convert_dry_run_apply_history_and_rollback() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    std::fs::write(p.join("data.txt"), "hi").unwrap();
+    std::fs::create_dir(p.join("models")).unwrap();
+    let out = run_home(
+        &["make", "data.txt", "models/a", "--symlink"],
+        p,
+        home.path(),
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    let link = p.join("models").join("a");
+    let is_symlink = || {
+        std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    };
+    assert!(is_symlink());
+
+    let o = run_home(
+        &["convert", "models", "--to", "hard", "--dry-run"],
+        p,
+        home.path(),
+    );
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(is_symlink(), "dry-run must not change anything");
+
+    let o = run_home(&["convert", "models", "--to", "hard"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(is_symlink(), "directories require --apply");
+
+    let o = run_home(
+        &["convert", "models", "--to", "hard", "--apply"],
+        p,
+        home.path(),
+    );
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(!is_symlink());
+    assert_eq!(std::fs::read_to_string(&link).unwrap(), "hi");
+
+    let hist = run_home(&["transaction", "history"], p, home.path());
+    let hist = text(&hist);
+    let id = hist.split_whitespace().next().unwrap().to_string();
+    assert!(hist.contains("applied"), "{hist}");
+
+    let o = run_home(&["transaction", "rollback", &id], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(is_symlink(), "rollback restores the symlink");
+}
+
+#[test]
+fn portable_export_validate_import_round_trip() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    std::fs::write(p.join("data.txt"), "hi").unwrap();
+    let o = run_home(&["make", "data.txt", "alias", "--symlink"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+
+    let o = run_home(&["export", ".", "--portable"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+    let manifest = p.join("smartlink-manifest.json");
+    let body = std::fs::read_to_string(&manifest).unwrap();
+    assert!(
+        body.contains("\"portable\": true") && !body.contains('\\'),
+        "{body}"
+    );
+
+    let o = run_home(&["validate", "--portable"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+
+    std::fs::remove_file(p.join("alias")).unwrap_or_else(|_| {
+        std::fs::remove_dir(p.join("alias")).unwrap();
+    });
+    let o = run_home(&["import", "smartlink-manifest.json"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(std::fs::symlink_metadata(p.join("alias")).is_ok());
+}
+
+#[test]
+fn validate_portable_rejects_bad_manifest() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("m.json"),
+        r#"{"version":1,"links":[{"link":"a\\b","target":"../x","type":"symlink"}]}"#,
+    )
+    .unwrap();
+    let o = run_home(
+        &["validate", "m.json", "--portable"],
+        dir.path(),
+        home.path(),
+    );
+    assert!(!o.status.success(), "{}", text(&o));
+}
+
+#[test]
+fn config_set_get_unset() {
+    let home = tempfile::tempdir().unwrap();
+    let cwd = tempfile::tempdir().unwrap();
+    let o = run_home(
+        &["config", "set", "relative", "true"],
+        cwd.path(),
+        home.path(),
+    );
+    assert!(o.status.success(), "{}", text(&o));
+    let o = run_home(&["config", "get", "relative"], cwd.path(), home.path());
+    assert!(text(&o).contains("true"));
+    let o = run_home(
+        &["config", "set", "relative", "maybe"],
+        cwd.path(),
+        home.path(),
+    );
+    assert!(!o.status.success());
+    let o = run_home(&["config", "unset", "relative"], cwd.path(), home.path());
+    assert!(o.status.success());
+}
+
+#[test]
+fn tree_stats_audit_explain_completion() {
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    std::fs::write(p.join("data.txt"), "hi").unwrap();
+    let o = run_home(&["make", "data.txt", "alias", "--symlink"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+
+    let o = run_home(&["tree", "."], p, home.path());
+    assert!(text(&o).contains("alias"), "{}", text(&o));
+    let o = run_home(&["stats", ".", "--json"], p, home.path());
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["links"], 1);
+    let o = run_home(&["audit", ".", "--strict"], p, home.path());
+    assert!(o.status.success(), "{}", text(&o));
+    let o = run_home(&["explain", "data.txt", "other"], p, home.path());
+    assert!(text(&o).contains("Selected link type"), "{}", text(&o));
+    for shell in ["bash", "zsh", "powershell"] {
+        let o = run_home(&["completion", shell], p, home.path());
+        assert!(o.status.success() && !o.stdout.is_empty(), "{shell}");
+    }
 }

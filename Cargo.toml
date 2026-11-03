@@ -27,6 +27,7 @@ anyhow = "1"
 colored = "2"
 pathdiff = "0.2"
 dialoguer = "0.11"
+clap_complete = "4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
@@ -40,7 +41,7 @@ windows-sys = { version = "0.59", features = [
 ] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29", features = ["fs", "mount"] }
+nix = { version = "0.29", features = ["fs", "mount", "signal"] }
 libc = "0.2"
 
 [dev-dependencies]

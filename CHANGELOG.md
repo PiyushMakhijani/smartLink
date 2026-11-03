@@ -6,6 +6,21 @@ the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Added
+
+- `slink profile` (`create`, `use`, `list`, `show`, `set`, `delete`): named configurations.
+- Transactions: `convert --dry-run` / `--apply`, `slink transaction history|show|rollback`,
+  with rollback metadata and automatic recovery when an operation fails.
+- Portable manifests: `slink export --portable`, `slink import`, `slink validate --portable`,
+  with link-type conversion rules between Windows, Linux and macOS.
+- `slink tree`, `stats`, `benchmark`, `completion`, `config`, `audit` and `explain`.
+
+### Fixed
+
+- Windows: hardlink count and file id were read from the wrong struct layout, so
+  ordinary files could be reported as hardlinked.
+- `doctor` circular-symlink detection and `watch` Ctrl-C / `--interval 0` handling.
+
 ## [0.1.0] - 2026-10-31
 
 First public release covering the full roadmap (M1–M5).

@@ -29,6 +29,11 @@ pub fn run(manifest_path: &Path, force: bool, dry_run: bool) -> Result<()> {
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
     let root_abs = link::strip_verbatim(std::fs::canonicalize(&root).unwrap_or(root));
+    apply(&m, &root_abs, force, dry_run)
+}
+
+/// Reconcile every entry of `m` against the filesystem below `root_abs`.
+pub fn apply(m: &Manifest, root_abs: &Path, force: bool, dry_run: bool) -> Result<()> {
     let os = manifest::current_os_key();
 
     let mut created = 0usize;
@@ -37,7 +42,7 @@ pub fn run(manifest_path: &Path, force: bool, dry_run: bool) -> Result<()> {
     let mut failures = 0usize;
 
     for entry in &m.links {
-        match reconcile(entry, &root_abs, os, force, dry_run) {
+        match reconcile(entry, root_abs, os, force, dry_run) {
             Ok(Action::Created) => created += 1,
             Ok(Action::UpToDate) => uptodate += 1,
             Ok(Action::Conflict) => conflicts += 1,

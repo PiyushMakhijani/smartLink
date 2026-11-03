@@ -12,16 +12,33 @@ use crate::link::{self, LinkKind};
 pub fn run(
     target: &Path,
     link_path: &Path,
-    hard: bool,
-    symlink: bool,
-    junction: bool,
-    relative: bool,
+    mut hard: bool,
+    mut symlink: bool,
+    mut junction: bool,
+    mut relative: bool,
     force: bool,
 ) -> Result<()> {
     if !target.exists() {
         bail!(
             "target {} does not exist (use `slink fix` later to heal dead links)",
             target.display().to_string().bold()
+        );
+    }
+    if !(hard || symlink || junction) {
+        match crate::state::effective_setting("default_type")?
+            .as_ref()
+            .map(|(v, _)| v.as_str())
+        {
+            Some("hard") => hard = true,
+            Some("symlink") => symlink = true,
+            Some("junction") => junction = true,
+            _ => {}
+        }
+    }
+    if !relative {
+        relative = matches!(
+            crate::state::effective_setting("relative")?,
+            Some((v, _)) if v == "true"
         );
     }
     let kind = choose_kind(target, link_path, hard, symlink, junction)?;
@@ -128,7 +145,7 @@ fn display_target(kind: LinkKind, target: &Path) -> PathBuf {
     }
 }
 
-fn choose_kind(
+pub fn choose_kind(
     target: &Path,
     link_path: &Path,
     hard: bool,

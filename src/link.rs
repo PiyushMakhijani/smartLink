@@ -145,10 +145,10 @@ mod tests {
         assert_eq!(relative_target(target, link), PathBuf::from("a.txt"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn relative_target_falls_back_when_no_common_root() {
         // different drives on Windows: diff_paths yields None -> keep target
-        // (on Unix these are just unrelated roots and the fallback also applies)
         let target = Path::new("C:/data/x");
         let link = Path::new("D:/proj/link");
         assert_eq!(relative_target(target, link), PathBuf::from("C:/data/x"));

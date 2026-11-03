@@ -26,6 +26,8 @@ through packaging and CI is live:
 - **Git integration** — `git check` (CI guard that fails on committed absolute
   symlinks) and `git install-hooks` / `git uninstall-hooks` (auto-`sync` on
   `post-checkout` / `post-merge`).
+- **Diagnostics** — `doctor` (link health report, including broken and circular
+  links) and `watch` (poll for link changes, with optional unambiguous repair).
 - **Polish** — CI matrix (Linux/macOS/Windows: fmt, clippy, build, test), a
   tag-triggered release workflow that ships cross-platform binaries, and
   Homebrew/Scoop/Winget packaging templates under [`packaging/`](packaging).
@@ -78,6 +80,10 @@ slink convert vendor\mylib --to symlink
 slink fix . --dry-run
 slink fix . --yes
 
+# inspect link health, then watch for changes (Ctrl-C to stop)
+slink doctor . --verbose
+slink watch . --interval 2 --repair
+
 # native copy-on-write clone (ReFS/NTFS-24H2, btrfs/XFS, APFS); never a plain copy
 slink dedupe base.bin snapshot.bin
 
@@ -94,7 +100,38 @@ slink git check .
 # install post-checkout / post-merge hooks that auto-run `slink sync`
 slink git install-hooks
 slink git uninstall-hooks
+
+# profiles: named configurations (settings: default_type, relative)
+slink profile create development --set default_type=symlink
+slink profile use development
+slink profile list
+
+# transactions: preview, apply, inspect, undo
+slink convert ./models --to symlink --dry-run
+slink convert ./models --to symlink --apply
+slink transaction history
+slink transaction rollback <id>
+
+# portable manifests between machines (Windows <-> Linux/macOS)
+slink export --portable
+slink validate --portable
+slink import smartlink-manifest.json
+
+# inspection and tooling
+slink tree . --follow          # nested link structure
+slink stats . --json           # link statistics
+slink benchmark --iterations 50
+slink audit . --strict         # absolute / escaping / sensitive / world-writable
+slink explain ./data ./link    # why a link type is selected
+slink config list              # central settings (also: get / set / unset / path)
+slink completion powershell    # or bash / zsh / fish / elvish
 ```
+
+Profiles and transaction history live in `SLINK_HOME` (default `%APPDATA%\smartlink`
+on Windows, `~/.config/smartlink` elsewhere). Converting a directory only previews
+until `--apply` is given; every applied conversion is recorded and rolls back
+automatically if a step fails. Portable export turns junctions into symlinks
+(with a per-OS override) and normalises paths to `/`.
 
 On Windows, creating symlinks *and* junctions as a regular user requires Developer
 Mode (the `SeCreateSymbolicLinkPrivilege`); administrators can do both directly.

@@ -98,7 +98,7 @@ pub fn same_volume(a: &Path, b: &Path) -> bool {
 
 /// `ln` (hard) equivalent.
 pub fn create_hardlink(target: &Path, link: &Path) -> Result<()> {
-    nix::unistd::link(target, link).with_context(|| {
+    std::fs::hard_link(target, link).with_context(|| {
         format!(
             "hardlink {} -> {} failed (same filesystem, files only)",
             link.display(),
@@ -109,7 +109,7 @@ pub fn create_hardlink(target: &Path, link: &Path) -> Result<()> {
 
 /// `ln -s` equivalent.
 pub fn create_symlink(target: &Path, link: &Path) -> Result<()> {
-    nix::unistd::symlink(target, link).context("symlink creation failed")
+    std::os::unix::fs::symlink(target, link).context("symlink creation failed")
 }
 
 /// `mount --bind` equivalent (Linux, requires privileges).

@@ -27,6 +27,32 @@ pub fn run(
     include_hardlinks: bool,
     dry_run: bool,
 ) -> Result<()> {
+    let (root_abs, manifest) = build_manifest(root, description, include_hardlinks)?;
+    let json = serde_json::to_string_pretty(&manifest)? + "\n";
+
+    if dry_run {
+        print!("{json}");
+        return Ok(());
+    }
+    let dest = out.unwrap_or_else(|| root_abs.join(DEFAULT_MANIFEST_NAME));
+    std::fs::write(&dest, &json)
+        .with_context(|| format!("could not write manifest {}", dest.display()))?;
+    println!(
+        "{} {} ({} link(s)) -> {}",
+        "wrote".green().bold(),
+        manifest::current_os_key().dimmed(),
+        manifest.links.len(),
+        dest.display()
+    );
+    Ok(())
+}
+
+/// Scan `root` and return its canonical path together with the manifest.
+pub fn build_manifest(
+    root: &Path,
+    description: Option<String>,
+    include_hardlinks: bool,
+) -> Result<(PathBuf, Manifest)> {
     let root_abs = link::strip_verbatim(
         std::fs::canonicalize(root).with_context(|| format!("cannot scan {}", root.display()))?,
     );
@@ -65,25 +91,11 @@ pub fn run(
     let manifest = Manifest {
         version: SCHEMA_VERSION,
         description,
+        source_os: None,
+        portable: false,
         links,
     };
-    let json = serde_json::to_string_pretty(&manifest)? + "\n";
-
-    if dry_run {
-        print!("{json}");
-        return Ok(());
-    }
-    let dest = out.unwrap_or_else(|| root_abs.join(DEFAULT_MANIFEST_NAME));
-    std::fs::write(&dest, &json)
-        .with_context(|| format!("could not write manifest {}", dest.display()))?;
-    println!(
-        "{} {} ({} link(s)) -> {}",
-        "wrote".green().bold(),
-        manifest::current_os_key().dimmed(),
-        manifest.links.len(),
-        dest.display()
-    );
-    Ok(())
+    Ok((root_abs, manifest))
 }
 
 /// Path relative to `root`, falling back to the absolute path (verbatim prefix

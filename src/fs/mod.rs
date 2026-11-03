@@ -5,6 +5,7 @@
 
 #[cfg(unix)]
 pub mod unix;
+#[cfg(windows)]
 pub mod windows;
 
 use std::path::{Path, PathBuf};
